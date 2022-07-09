@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "git-blame-project"
+version = "0.1.0"
+description = "Tool for Performing Blame & Contribution Analysis per Line on Entire Project"
+authors = ["Nick Florin <nickmflorin@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+pylint = "^2.14.4"
+ipdb = "^0.13.9"
+flake8 = "^4.0.1"
+autopep8 = "^1.6.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
