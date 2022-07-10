@@ -94,7 +94,9 @@ disable=
   consider-using-f-string,
   consider-using-get,
   signature-differs,
-  invalid-overridden-method
+  invalid-overridden-method,
+  useless-option-value,
+  use-a-generator
 
 
 [REPORTS]

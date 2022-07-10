@@ -6,6 +6,8 @@ authors = ["Nick Florin <nickmflorin@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
+click = "^8.1.3"
+python-dateutil = "^2.8.2"
 
 [tool.poetry.dev-dependencies]
 pylint = "^2.14.4"
@@ -13,6 +15,10 @@ ipdb = "^0.13.9"
 flake8 = "^4.0.1"
 autopep8 = "^1.6.0"
 
+[tool.poetry.scripts]
+git-blame-project = "git_blame_project.cli:main"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+

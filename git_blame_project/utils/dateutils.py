@@ -2,6 +2,10 @@ import datetime
 from dateutil import parser
 
 
+class DateTimeValueError(ValueError):
+    pass
+
+
 def ensure_datetime(value):
     """
     Ensures that the provided value is a `obj:datetime.datetime` instance
@@ -9,10 +13,12 @@ def ensure_datetime(value):
     or a `obj:datetime.date` instance to a `obj:datetime.datetime` instance.
     If the value cannot be safely converted to a `obj:datetime.datetime`
     instance, a ValueError will be raised.
-    Args:
-        value (`obj:datetime.datetime`, `obj:datetime.date` or `obj:str)
-            The value that should be converted to a `obj:datetime.datetime`
-            instance.
+
+    Parameters:
+    -----------
+    value: :obj:`datetime.datetime`, :obj:`datetime.date` or :obj:`str`
+        The value that should be converted to a :obj:`datetime.datetime`
+        instance.
     """
     if type(value) is datetime.datetime:
         return value
@@ -22,10 +28,10 @@ def ensure_datetime(value):
         try:
             return parser.parse(value)
         except ValueError as e:
-            raise ValueError(
+            raise DateTimeValueError(
                 "The provided value cannot be converted to a "
                 "datetime.datetime instance."
             ) from e
     else:
-        raise ValueError(
+        raise DateTimeValueError(
             "Invalid value %s supplied - cannot convert to datetime." % value)
