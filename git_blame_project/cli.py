@@ -4,13 +4,9 @@ import click
 
 import git_blame_project
 
-from .models import Blame
-from .types import RootParamType
-
-
-DIRECTORY = "/Users/nick/repos/happybudget"
-
-DEFAULT_IGNORE_DIRECTORIES = ['.git', 'node_modules', 'svgs']
+from .constants import HelpText
+from .models import Blame, BlameLine
+from .types import RootParamType, CommaSeparatedListType
 
 
 def welcome_message():
@@ -27,32 +23,21 @@ def cli():
     pass
 
 
-# class BasedIntParamType(click.ParamType):
-#     name = "integer"
-
-#     def convert(self, value, param, ctx):
-#         if isinstance(value, int):
-#             return value
-
-#         try:
-#             if value[:2].lower() == "0x":
-#                 return int(value[2:], 16)
-#             elif value[:1] == "0":
-#                 return int(value, 8)
-#             return int(value, 10)
-#         except ValueError:
-#             self.fail(f"{value!r} is not a valid integer", param, ctx)
-
-
 @cli.command()
 @click.argument('repository', type=RootParamType(exists=True))
-def main(repository):
+@click.option('--filelimit', '-fl', type=int, help=HelpText.FILE_LIMIT)
+@click.option('--outputcols', type=CommaSeparatedListType(
+    choices=[p.name for p in BlameLine.parse_attributes]
+), help=HelpText.OUTPUT_COLS)
+def main(repository, **kwargs):
     welcome_message()
     blamed = Blame(
         repository,
         ignore_dirs=["migrations", ".git"],
         ignore_file_types=[
-            "woff", "woff2", "eot", "ttf", "svg", ".lock", ".json"]
+            "woff", "woff2", "eot", "ttf", "svg", ".lock", ".json"],
+        **kwargs
     )
     blamed()
-    blamed.analyze_contributors()
+    results = blamed.get_contributions_by_line()
+    print(results)

@@ -5,11 +5,15 @@ class GitBlameProjectError(Exception):
     pass
 
 
-class FailedBlame(LocationContextExtensible):
+class ParserError(GitBlameProjectError, LocationContextExtensible):
     def __init__(self, detail=None, silent=False, **kwargs):
+        super().__init__("")
+        LocationContextExtensible.__init__(self, **kwargs)
         self._detail = detail
         self._silent = silent
-        super().__init__(**kwargs)
+
+    def __str__(self):
+        return self.message
 
     @property
     def silent(self):
@@ -17,10 +21,7 @@ class FailedBlame(LocationContextExtensible):
 
     @property
     def base_message(self):
-        return (
-            "There was an error parsing the data in file "
-            f"{self.repository_name}."
-        )
+        raise NotImplementedError()
 
     @property
     def detail(self):
@@ -36,7 +37,7 @@ class FailedBlame(LocationContextExtensible):
         return base
 
 
-class FailedBlameLine(FailedBlame):
+class BlameLineParserError(ParserError):
     def __init__(self, data, **kwargs):
         super().__init__(**kwargs)
         self._data = data
@@ -51,40 +52,44 @@ class FailedBlameLine(FailedBlame):
             "could not be parsed."
 
 
-class FailedBlameFile(FailedBlame):
+class BlameLineAttributeParserError(BlameLineParserError):
+    def __init__(self, data, attr, critical=True, value=None, **kwargs):
+        super().__init__(data, **kwargs)
+        self._attr = attr
+        self._critical = critical
+        self._value = value
+
+    @property
+    def attr(self):
+        return self._attr
+
+    @property
+    def critical(self):
+        return self._critical
+
+    @property
+    def detail(self):
+        root_detail = super().detail
+        if root_detail is not None:
+            return root_detail
+        elif self._value is not None:
+            return f"The value {self._value} is invalid."
+        return None
+
+    @property
+    def base_message(self):
+        return f"The attribute {self.attr} could not be parsed from line " \
+            f"{self.data} in file {self.repository_name}."
+
+    @property
+    def non_critical_message(self):
+        return (
+            f"Warning: Attribute {self.attr} is being excluded from line.\n"
+            f"{self.message}"
+        )
+
+
+class BlameFileParserError(ParserError):
     @property
     def base_message(self):
         return f"The file {self.repository_name} could not be parsed."
-
-
-class BlameLineParserError(GitBlameProjectError, FailedBlameLine):
-    def __init__(self, *args, **kwargs):
-        super().__init__("")
-        FailedBlameLine.__init__(self, *args, **kwargs)
-
-    def __str__(self):
-        return self.message
-
-    def to_model(self):
-        return FailedBlameLine(
-            data=self.data,
-            context=self.context,
-            silent=self.silent,
-            detail=self.detail
-        )
-
-
-class BlameFileParserError(GitBlameProjectError, FailedBlameFile):
-    def __init__(self, *args, **kwargs):
-        super().__init__("")
-        FailedBlameFile.__init__(self, *args, **kwargs)
-
-    def __str__(self):
-        return self.message
-
-    def to_model(self):
-        return FailedBlameFile(
-            context=self.context,
-            silent=self.silent,
-            detail=self.detail
-        )

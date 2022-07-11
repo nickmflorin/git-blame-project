@@ -6,125 +6,131 @@ import pathlib
 
 import click
 
+from git_blame_project import constants
+
 from .context import LocationContextExtensible, LocationContext
 from .exceptions import (
-    BlameLineParserError, BlameFileParserError, FailedBlameLine,
-    FailedBlameFile)
+    BlameLineParserError, BlameFileParserError, GitBlameProjectError,
+    BlameLineAttributeParserError)
 from .utils import ensure_datetime, DateTimeValueError
 
 
-DEFAULT_IGNORE_DIRECTORIES = ['.git']
-DEFAULT_IGNORE_FILE_TYPES = [".png", ".jpeg", ".jpg", ".gif", ".svg"]
+class ParsedAttribute:
+    def __init__(self, name, regex_index, critical=True):
+        self.name = name
+        self._regex_index = regex_index
+        self._critical = critical
+
+    def fail(self, data, context, **kwargs):
+        raise BlameLineAttributeParserError(
+            data=data,
+            attr=self._attr,
+            critical=self._critical,
+            context=context,
+            **kwargs
+        )
+
+    def get_raw_value(self, groups):
+        if hasattr(self._regex_index, '__iter__'):
+            return [groups[i].strip() for i in self._regex_index]
+        return groups[self._regex_index].strip()
+
+    # pylint: disable=inconsistent-return-statements
+    def parse(self, data, groups, context):
+        try:
+            return self.get_raw_value(groups)
+        except IndexError:
+            self.fail(data, context)
 
 
-COMMIT_REGEX = r"([\^a-zA-Z0-9]*)"
-DATE_REGEX = r"([0-9]{4})-([0-9]{2})-([0-9]{2})"
-TIME_REGEX = r"([0-9]{2}):([0-9]{2}):([0-9]{2})"
+class DateTimeParsedAttribute(ParsedAttribute):
+    def get_raw_value(self, groups):
+        parts = super().get_raw_value(groups)
+        date_string = "-".join(parts[:3])
+        time_string = ":".join(parts[3:])
+        return f"{date_string} {time_string}"
 
-REGEX_STRING = COMMIT_REGEX \
-    + r"\s*\(([a-zA-Z0-9\s]*)\s*" \
-    + DATE_REGEX + r"\s*" \
-    + TIME_REGEX + r"\s*" \
-    + r"([-+0-9]*)\s*([0-9]*)\)\s*(.*)"
+    # pylint: disable=inconsistent-return-statements
+    def parse(self, data, groups, context):
+        value = super().parse(data, groups, context)
+        try:
+            return ensure_datetime(value)
+        except DateTimeValueError:
+            self.fail(data, context)
+
+
+class IntegerParsedAttribute(ParsedAttribute):
+    # pylint: disable=inconsistent-return-statements
+    def parse(self, data, groups, context):
+        value = super().parse(data, groups, context)
+        try:
+            return int(value)
+        except ValueError:
+            self.fail(data, context, value=value)
 
 
 class BlameLine(LocationContextExtensible):
-    def __init__(self, *args, **kwargs):
+    parse_attributes = [
+        ParsedAttribute('commit', 0),
+        ParsedAttribute('contributor', 1),
+        IntegerParsedAttribute('line_no', 9),
+        DateTimeParsedAttribute(
+            name='datetime',
+            regex_index=[2, 3, 4, 5, 6, 7],
+            critical=False
+        ),
+        ParsedAttribute('code', 10),
+    ]
+
+    def __init__(self, data, **kwargs):
         super().__init__(**kwargs)
+        self.data = data
 
-        if len(args) == 1 or 'data' in kwargs:
-            data = kwargs.pop('data', None)
-            if args:
-                data = args[0]
-            kw = self.kwargs_from_data(data, context=self.context)
-        else:
-            kw = dict(*args, **kwargs)
-
-        self._code = kw.pop('code')
-        self._commit = kw.pop('commit')
-        self._collaborator = kw.pop('collaborator')
-        self._dt = kw.pop('dt')
-        self._line_no = kw.pop('line_no')
-
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, data, **kwargs):
         instance = super(BlameLine, cls).__new__(cls)
         try:
-            instance.__init__(*args, **kwargs)
+            instance.__init__(data, **kwargs)
         except BlameLineParserError as e:
-            return e.to_model()
+            return e
         return instance
 
     @property
-    def csv_row(self):
-        return [self._collaborator, self._code]
+    def data(self):
+        return self._data
 
-    @property
-    def line_no(self):
-        try:
-            return int(self._line_no)
-        except ValueError:
-            print("ERROR")
-            return None
-
-    @property
-    def collaborator(self):
-        return self._collaborator
-
-    @property
-    def dt(self):
-        return self._dt
-
-    @property
-    def commit(self):
-        return self._commit
-
-    @property
-    def code(self):
-        return self._code
-
-    def __str__(self):
-        return f"<Line collaborator={self._collaborator} code={self._code}>"
-
-    @classmethod
-    def datetime_from_data(cls, data, groups, context):
-        try:
-            datetime_string = f"{groups[2]}-{groups[3]}-{groups[4]} " \
-                + f"{groups[5]}:{groups[6]}:{groups[7]}"
-            return ensure_datetime(datetime_string)
-        except IndexError as e:
-            raise BlameLineParserError(data=data, context=context) from e
-        except DateTimeValueError as e:
-            # TODO: We might want to lax this so that the date is just not
-            # included.
+    @data.setter
+    def data(self, value):
+        regex_result = re.search(constants.REGEX_STRING, value)
+        if regex_result is None:
+            # Sometimes, the result of the git-blame will be an empty string.
+            # We should just ignore those for now.
+            silent = value == ""
             raise BlameLineParserError(
-                context=context,
-                data=data,
-                reason="The datetime of the blame could not be parsed."
-            ) from e
-
-    @classmethod
-    def kwargs_from_data(cls, data, context):
-        result = re.search(REGEX_STRING, data)
-        if result is None:
-            silent = data == ""
-            raise BlameLineParserError(
-                data=data,
-                context=context,
-                # Sometimes, the result of the git-blame will be an empty string.
-                # We should just ignore those for now.
+                data=value,
+                context=self.context,
                 silent=silent
             )
-        groups = result.groups()
-        try:
-            return dict(
-                commit=groups[0].strip(),
-                collaborator=groups[1].strip(),
-                dt=cls.datetime_from_data(data, groups, context),
-                line_no=groups[9].strip(),
-                code=groups[10].strip(),
-            )
-        except IndexError as e:
-            raise BlameLineParserError(data=data, context=context) from e
+        groups = regex_result.groups()
+        for attr in self.parse_attributes:
+            try:
+                parsed_value = attr.parse(value, groups, self.context)
+            except BlameLineAttributeParserError as e:
+                if not e.critical:
+                    click.echo(e.non_critical_message)
+                    setattr(self, attr.name, None)
+                else:
+                    # Raising the exception will cause the overall line to be
+                    # excluded.
+                    raise e
+            else:
+                setattr(self, attr.name, parsed_value)
+
+    @property
+    def csv_row(self):
+        return [self.contributor, self.code]
+
+    def __str__(self):
+        return f"<Line contributor={self.contributor} code={self.code}>"
 
 
 class BlameFile(LocationContextExtensible):
@@ -132,12 +138,13 @@ class BlameFile(LocationContextExtensible):
         super().__init__(**kwargs)
         self._lines = lines
 
-    # def __call__(self):
-    #     self._lines = []
-
     @property
     def lines(self):
         return self._lines
+
+    @property
+    def num_lines(self):
+        return len(self.lines)
 
     @property
     def csv_rows(self):
@@ -145,32 +152,25 @@ class BlameFile(LocationContextExtensible):
 
     @classmethod
     def create(cls, context):
-        if any([
-            p in DEFAULT_IGNORE_DIRECTORIES
-            for p in context.repository_path.parts
-        ]):
-            return None
         try:
             result = subprocess.check_output(
                 ['git', 'blame', "%s" % context.absolute_file_path])
         except subprocess.CalledProcessError as error:
-            return FailedBlameFile(context=context, detail=error)
+            return BlameFileParserError(context=context, detail=error)
         else:
             try:
                 result = result.decode("utf-8")
             except UnicodeDecodeError as error:
-                return FailedBlameFile(context=context, detail=error)
+                return BlameFileParserError(context=context, detail=error)
 
             blame_lines = []
             for raw_line in result.split("\n"):
-                # if raw_line != "":
                 blamed = BlameLine(raw_line, context=context)
-                if blamed is not None:
-                    if isinstance(blamed, FailedBlameLine):
-                        if not blamed.silent:
-                            click.echo(blamed.message)
-                    else:
-                        blame_lines.append(blamed)
+                if isinstance(blamed, BlameLineParserError):
+                    if not blamed.silent:
+                        click.echo(blamed.message)
+                else:
+                    blame_lines.append(blamed)
             return cls(blame_lines, context=context)
 
 
@@ -181,10 +181,22 @@ class Blame:
         self._ignore_dirs = kwargs.pop('ignore_dirs', None)
         self._ignore_file_types = kwargs.pop('ignore_file_types', None)
         self._dry_run = kwargs.pop('dry_run', False)
+        self._filelimit = kwargs.pop('filelimit', None)
+        self._outputcols = kwargs.pop('outputcols', None)
 
     @property
     def files(self):
+        if not hasattr(self, '_files'):
+            raise GitBlameProjectError("Blame has not yet been performed.")
         return self._files
+
+    @property
+    def filelimit(self):
+        return self._filelimit
+
+    @property
+    def num_lines(self):
+        return sum(f.num_lines for f in self.files)
 
     @property
     def dry_run(self):
@@ -197,8 +209,14 @@ class Blame:
     @property
     def ignore_dirs(self):
         if self._ignore_dirs is not None:
-            return self._ignore_dirs + DEFAULT_IGNORE_DIRECTORIES
-        return DEFAULT_IGNORE_DIRECTORIES
+            return self._ignore_dirs + constants.DEFAULT_IGNORE_DIRECTORIES
+        return constants.DEFAULT_IGNORE_DIRECTORIES
+
+    @property
+    def outputcols(self):
+        if self._outputcols is None:
+            return [p.name for p in BlameLine.parse_attributes]
+        return self._outputcols
 
     @classmethod
     def transform_file_types(cls, file_types):
@@ -214,29 +232,32 @@ class Blame:
     def ignore_file_types(self):
         if self._ignore_file_types is not None:
             return self.transform_file_types(
-                self._ignore_file_types + DEFAULT_IGNORE_FILE_TYPES)
-        return self.transform_file_types(DEFAULT_IGNORE_FILE_TYPES)
-
-    def analyze_contributors(self):
-        total_lines = 0
-        count = collections.defaultdict(int)
-        for file in self.files:
-            for line in file.lines:
-                count[line.collaborator] += 1
-                total_lines += 1
-        final_data = {}
-        for k, v in count.items():
-            final_data[k] = "{:.12%}".format((v / total_lines))
-        print(final_data)
+                self._ignore_file_types + constants.DEFAULT_IGNORE_FILE_TYPES)
+        return self.transform_file_types(constants.DEFAULT_IGNORE_FILE_TYPES)
 
     def __call__(self):
-        self._files = []
+        setattr(self, '_files', [])
 
+        # We must physically move to the directory that the repository is
+        # located in such that we can access the `git` command line tools.
         os.chdir(self.repository)
 
-        breaknum = 0
+        self._perform_blame()
 
-        # import ipdb; ipdb.set_trace()
+        # print("WRITING CSV")
+
+        # with open('/Users/nick/Desktop/test.csv', 'w') as csvfile:
+        #     writer = csv.writer(csvfile, delimiter=',')
+        #     writer.writerow(["Contributor", "Code"])
+        #     for file in self._files:
+        #         print(file.csv_rows)
+        #         writer.writerows(file.csv_rows)
+
+    def output(self):
+        pass
+
+    def _perform_blame(self):
+        blame_count = 0
         for path, _, files in os.walk(self.repository):
             for name in files:
                 file_dir = pathlib.Path(path)
@@ -254,21 +275,32 @@ class Blame:
                     name=name
                 )
                 blamed_file = BlameFile.create(context)
-                if isinstance(blamed_file, FailedBlameFile):
+                if isinstance(blamed_file, BlameFileParserError):
                     if not blamed_file.silent:
                         click.echo(blamed_file.message)
                 else:
                     self._files.append(blamed_file)
-                    breaknum += 1
-                    if breaknum > 100:
+                    blame_count += 1
+                    if blame_count >= self.filelimit:
                         return
 
-        # print("WRITING CSV")
+    def count_lines_by_attr(self, attr, formatter=None):
+        count = collections.defaultdict(int)
+        for file in self.files:
+            for line in file.lines:
+                count[getattr(line, attr)] += 1
+        final_data = {}
+        for k, v in count.items():
+            if formatter is not None:
+                final_data[k] = formatter(v)
+            else:
+                final_data[k] = v
+        return final_data
 
-        # with open('/Users/nick/Desktop/test.csv', 'w') as csvfile:
-        #     writer = csv.writer(csvfile, delimiter=',')
-        #     writer.writerow(["Contributor", "Code"])
-        #     for file in self._files:
-        #         print(file.csv_rows)
-        #         writer.writerows(file.csv_rows)
-
+    def get_contributions_by_line(self, format_as_percentage=True):
+        def pct_formatter(v):
+            return "{:.12%}".format((v / self.num_lines))
+        return self.count_lines_by_attr(
+            attr='contributor',
+            formatter=pct_formatter if format_as_percentage else None
+        )
