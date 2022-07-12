@@ -96,7 +96,8 @@ disable=
   signature-differs,
   invalid-overridden-method,
   useless-option-value,
-  use-a-generator
+  use-a-generator,
+  unspecified-encoding
 
 
 [REPORTS]

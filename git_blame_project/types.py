@@ -1,12 +1,8 @@
 import pathlib
 import click
 
-from git_blame_project.utils import humanize_list
-
+from .constants import OutputTypes
 from .stdout import inconsistent_output_location_warning
-
-
-VALID_OUTPUT_FILE_TYPES = ["csv", "xlsx"]
 
 
 class PathType(click.Path):
@@ -74,6 +70,15 @@ class OutputFileDirType(DirectoryType):
         return value
 
 
+def pathlib_ext(path):
+    if path.exists():
+        if path.is_file():
+            return path.suffix
+    elif path.suffix != "":
+        return path.suffix
+    return None
+
+
 class OutputFileType(PathType):
     def __init__(self, *args, **kwargs):
         # We do not need to ensure that the full path exists in the case that
@@ -83,20 +88,15 @@ class OutputFileType(PathType):
         super().__init__(*args, **kwargs)
 
     def validate_extension(self, ext, param, ctx):
-        # TODO: We might want to use the click.types.Choice class here.
-        if ext.lower() not in [
-                f".{a.lower()}" for a in VALID_OUTPUT_FILE_TYPES]:
-            humanized = humanize_list(
-                value=VALID_OUTPUT_FILE_TYPES,
-                conjunction="or"
-            )
-            self.fail(
-                f"The extension {ext.lower()} is not a supported "
-                "output file type.  Output files must be of type "
-                f"{humanized}.",
-                param,
-                ctx
-            )
+        # The outputtype will only not be in the context params if it was not
+        # specified or specified after the outputfile argument.  If it was
+        # specified after the outputfile argument, this validation must be
+        # done inside of the outputtype associated extension of
+        # :obj:`click.params.ParamType`.
+        if 'outputtype' in ctx.params:
+            ctx.params['outputtype'].validate_file_extension(ext, ctx, param)
+        else:
+            OutputTypes.validate_general_file_extension(ext, ctx, param)
 
     def convert(self, value, param, ctx):
         # In the case the value is not specified, it will be auto generated
@@ -104,26 +104,26 @@ class OutputFileType(PathType):
         # CLI arguments are collected.
         value = super().convert(value, param, ctx)
 
-        # The determination of whether or not the path refers to a file can
-        # only be made if the file exists at that path.
+        # The determination of whether or not the path refers to a file or a
+        # directory can only be made if the file exists at that path.
         if value.exists():
-            # We do not have to validate whether or not the directory exists
-            # because in the case that the value is a file, it can only exist
-            # if the parent directory exists.
+            # If the provided value refers to a file that exists, we have to
+            # validate the extension.  If the value refers to a directory,
+            # we do not have to validate that the directory exists because
+            # the directory is guaranteed to exist if the file exists.
             if value.is_file():
                 self.validate_extension(value.suffix, param, ctx)
 
         # If the path (as a directory or a filepath) does not exist, we only
         # want to validate the extension in the case that the path refers to
-        # a filepath and has an extension - in which case it is not a directory.
+        # a filepath and has an extension.  If the suffix is an empty string,
+        # that means that the path refers to a directory that does not exist.
         elif value.suffix != "":
             self.validate_extension(value.suffix, param, ctx)
         else:
-            # Here, we know that there is not a suffix (which means we are
-            # dealing with a directory) and we know that the directory does not
-            # exist.  In this case, the value is invalid because we cannot
-            # autogenerate a filename and save it in a non-existent parent
-            # directory.
+            # TODO: Figure out how to make it so that when output types are
+            # provided, the extension isn't required on a file and it can be
+            # just a name.
             self.fail(
                 f"The directory {str(value)} does not exist.",
                 param,
@@ -144,13 +144,11 @@ class OutputFileType(PathType):
             # The output directory is guaranteed to be a directory that exists.
             outputdir = ctx.params['outputdir']
             assert outputdir.is_dir() and outputdir.exists()
-            # if outputdir
-            # if outputfile.is_dir():
-            #     if outputfile != value:
-            #         inconsistent_output_location_warning(value, outputfile)
-            # elif outputfile.parent != value:
-            #     inconsistent_output_location_warning(value, outputfile)
-
+            if value.is_dir():
+                if value != outputdir:
+                    inconsistent_output_location_warning(outputdir, value)
+            elif value.parent != outputdir:
+                inconsistent_output_location_warning(outputdir, value)
         return value
 
 
@@ -173,3 +171,30 @@ class CommaSeparatedListType(click.types.StringParamType):
                 validated.append(choices_type.convert(result, param, ctx))
             return validated
         return results
+
+
+class OutputTypeType(CommaSeparatedListType):
+    def __init__(self, *args, **kwargs):
+        kwargs.update(
+            choices=[ot.slug for ot in OutputTypes.__ALL__],
+            case_sensitive=False
+        )
+        super().__init__(*args, **kwargs)
+
+    def convert(self, value, param, ctx):
+        validated_choices = super().convert(value, param, ctx)
+        output_types = OutputTypes(*validated_choices)
+        # The outputfile will only not be in the context params if it was not
+        # specified or specified after the outputtype argument.  If it was
+        # specified after the outputtype argument, this validation must be
+        # done inside of the outputfile associated extension of
+        # :obj:`click.params.ParamType`.
+        if 'outputfile' in ctx.params:
+            if ctx.params['outputfile'].exists():
+                if ctx.params['outputfile'].is_file():
+                    output_types.validate_file_extension(
+                        ctx.params['outputfile'].suffix, ctx, param)
+            elif ctx.params['outputfile'].suffix != "":
+                output_types.validate_file_extension(
+                    ctx.params['outputfile'].suffix, ctx, param)
+        return output_types

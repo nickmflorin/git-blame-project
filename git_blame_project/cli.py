@@ -7,7 +7,8 @@ import git_blame_project
 from .constants import HelpText
 from .models import Blame, BlameLine
 from .types import (
-    RootParamType, CommaSeparatedListType, OutputFileType, OutputFileDirType)
+    RootParamType, CommaSeparatedListType, OutputFileType, OutputFileDirType,
+    OutputTypeType)
 
 
 def welcome_message():
@@ -27,6 +28,7 @@ def cli():
 @cli.command()
 @click.argument('repository', type=RootParamType(exists=True))
 @click.option('--filelimit', '-fl', type=int, help=HelpText.FILE_LIMIT)
+@click.option('--outputtype', type=OutputTypeType(), help=HelpText.OUTPUT_TYPE)
 @click.option('--outputfile', type=OutputFileType(), help="")
 @click.option('--outputdir', type=OutputFileDirType(exists=True), help="")
 @click.option('--outputcols', type=CommaSeparatedListType(

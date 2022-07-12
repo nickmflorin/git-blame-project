@@ -1,9 +1,28 @@
 import click
 
 
+class TerminalCodes:
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
+
+    @classmethod
+    def underline(cls, text):
+        return cls.UNDERLINE + text + cls.END
+
+    @classmethod
+    def bold(cls, text):
+        return cls.BOLD + text + cls.END
+
+
 def warning(message):
-    # TODO: Make "Warning" bold.
-    click.secho(f"Warning: {message}", fg="yellow")
+    prefix = TerminalCodes.bold("Warning:")
+    click.secho(f"{prefix} {message}", fg="yellow")
+
+
+def error(message):
+    prefix = TerminalCodes.bold("Error:")
+    click.secho(f"{prefix} {message}", fg="red")
 
 
 def inconsistent_output_location_warning(outputdir, outputfile):

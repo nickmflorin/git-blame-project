@@ -279,15 +279,18 @@ class Blame:
         return self._outputdir
 
     @property
+    def default_outputfile(self):
+        branch_name = get_git_branch(self.repository)
+        return f"{self.outputdir.parts[-1]}-{branch_name}.csv"
+
+    @property
     def outputfile(self):
-        # The output file is guaranteed to be an existent directory or a file
-        # that may or may not exist in a parent directory that does exist.
+        # The output file is guaranteed to be an existing directory or a file
+        # that may or may not exist, but in a parent directory that does exist.
         if self._outputfile is None:
-            branch_name = get_git_branch(self.repository)
-            return self.outputdir / f"{self.outputdir.parts[-1]}-{branch_name}.csv"
+            return self.outputdir / self.default_outputfile
         elif self._outputfile.is_dir():
-            branch_name = get_git_branch(self.repository)
-            return self._outputfile / f"{self.outputdir.parts[-1]}-{branch_name}.csv"
+            return self._outputfile / self.default_outputfile
         return self._outputfile
 
     def __call__(self):
