@@ -1,4 +1,5 @@
 import collections
+import csv
 import os
 import re
 import subprocess
@@ -12,14 +13,49 @@ from .context import LocationContextExtensible, LocationContext
 from .exceptions import (
     BlameLineParserError, BlameFileParserError, GitBlameProjectError,
     BlameLineAttributeParserError)
+from .fs import repository_directory_context
+from .stdout import warning
 from .utils import ensure_datetime, DateTimeValueError
 
 
+def get_git_branch(repository):
+    with repository_directory_context(repository):
+        result = subprocess.check_output(['git', 'branch'])
+        try:
+            result = result.decode("utf-8")
+        except UnicodeDecodeError:
+            warning(
+                "There was an error determining the current git branch for "
+                "purposes of auto-generating a filename.  A placeholder value "
+                "will be used."
+            )
+            return "unknown"
+        lines = [r.strip() for r in result.split("\n")]
+        for line in lines:
+            if line.startswith("*"):
+                return line.split("*")[1].strip()
+        warning(
+            "There was an error determining the current git branch for "
+            "purposes of auto-generating a filename.  A placeholder value "
+            "will be used."
+        )
+        return "unknown"
+
+
 class ParsedAttribute:
-    def __init__(self, name, regex_index, critical=True):
-        self.name = name
+    def __init__(self, name, regex_index, title, critical=True):
+        self._name = name
+        self._title = title
         self._regex_index = regex_index
         self._critical = critical
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def title(self):
+        return self._title
 
     def fail(self, data, context, **kwargs):
         raise BlameLineAttributeParserError(
@@ -71,15 +107,16 @@ class IntegerParsedAttribute(ParsedAttribute):
 
 class BlameLine(LocationContextExtensible):
     parse_attributes = [
-        ParsedAttribute('commit', 0),
-        ParsedAttribute('contributor', 1),
-        IntegerParsedAttribute('line_no', 9),
+        ParsedAttribute('commit', 0, title='Commit'),
+        ParsedAttribute('contributor', 1, title='Contributor'),
+        IntegerParsedAttribute('line_no', 9, title='Line No.'),
         DateTimeParsedAttribute(
             name='datetime',
             regex_index=[2, 3, 4, 5, 6, 7],
-            critical=False
+            critical=False,
+            title='Date/Time'
         ),
-        ParsedAttribute('code', 10),
+        ParsedAttribute('code', 10, title='Code'),
     ]
 
     def __init__(self, data, **kwargs):
@@ -125,9 +162,8 @@ class BlameLine(LocationContextExtensible):
             else:
                 setattr(self, attr.name, parsed_value)
 
-    @property
-    def csv_row(self):
-        return [self.contributor, self.code]
+    def csv_row(self, output_cols):
+        return [getattr(self, c) for c in output_cols]
 
     def __str__(self):
         return f"<Line contributor={self.contributor} code={self.code}>"
@@ -146,9 +182,8 @@ class BlameFile(LocationContextExtensible):
     def num_lines(self):
         return len(self.lines)
 
-    @property
-    def csv_rows(self):
-        return [line.csv_row for line in self._lines]
+    def csv_rows(self, output_cols):
+        return [line.csv_row(output_cols) for line in self._lines]
 
     @classmethod
     def create(cls, context):
@@ -183,6 +218,8 @@ class Blame:
         self._dry_run = kwargs.pop('dry_run', False)
         self._filelimit = kwargs.pop('filelimit', None)
         self._outputcols = kwargs.pop('outputcols', None)
+        self._outputdir = kwargs.pop('outputdir', None)
+        self._outputfile = kwargs.pop('outputfile', None)
 
     @property
     def files(self):
@@ -235,26 +272,40 @@ class Blame:
                 self._ignore_file_types + constants.DEFAULT_IGNORE_FILE_TYPES)
         return self.transform_file_types(constants.DEFAULT_IGNORE_FILE_TYPES)
 
+    @property
+    def outputdir(self):
+        if self._outputdir is None:
+            return pathlib.Path(os.getcwd())
+        return self._outputdir
+
+    @property
+    def outputfile(self):
+        # The output file is guaranteed to be an existent directory or a file
+        # that may or may not exist in a parent directory that does exist.
+        if self._outputfile is None:
+            branch_name = get_git_branch(self.repository)
+            return self.outputdir / f"{self.outputdir.parts[-1]}-{branch_name}.csv"
+        elif self._outputfile.is_dir():
+            branch_name = get_git_branch(self.repository)
+            return self._outputfile / f"{self.outputdir.parts[-1]}-{branch_name}.csv"
+        return self._outputfile
+
     def __call__(self):
         setattr(self, '_files', [])
 
         # We must physically move to the directory that the repository is
         # located in such that we can access the `git` command line tools.
-        os.chdir(self.repository)
-
-        self._perform_blame()
-
-        # print("WRITING CSV")
-
-        # with open('/Users/nick/Desktop/test.csv', 'w') as csvfile:
-        #     writer = csv.writer(csvfile, delimiter=',')
-        #     writer.writerow(["Contributor", "Code"])
-        #     for file in self._files:
-        #         print(file.csv_rows)
-        #         writer.writerows(file.csv_rows)
+        with repository_directory_context(self.repository):
+            self._perform_blame()
+        self.output()
 
     def output(self):
-        pass
+        click.echo(f"Writing to {str(self.outputfile)}")
+        with open(str(self.outputfile), 'w') as csvfile:
+            writer = csv.writer(csvfile, delimiter=',')
+            writer.writerow([attr.title for attr in BlameLine.parse_attributes])
+            for file in self.files:
+                writer.writerows(file.csv_rows(self.outputcols))
 
     def _perform_blame(self):
         blame_count = 0
