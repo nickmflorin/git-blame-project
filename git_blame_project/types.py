@@ -79,7 +79,16 @@ def pathlib_ext(path):
     return None
 
 
+class OutputFile:
+    def __init__(self, path, raw_value, infer_ext_from_output_type=False):
+        self._path = path
+        self._raw_value = raw_value
+        self._infer_ext_from_output_type = infer_ext_from_output_type
+
+
 class OutputFileType(PathType):
+    INFER_FROM_OUTPUT_TYPE = "INFER_FROM_OUTPUT_TYPE"
+
     def __init__(self, *args, **kwargs):
         # We do not need to ensure that the full path exists in the case that
         # the path includes the filename.  We just need to ensure the directory
@@ -98,29 +107,56 @@ class OutputFileType(PathType):
         else:
             OutputTypes.validate_general_file_extension(ext, ctx, param)
 
-    def convert(self, value, param, ctx):
+    def convert(self, v, param, ctx):
         # In the case the value is not specified, it will be auto generated
         # based on the repository and the commit.  This will happen after the
         # CLI arguments are collected.
-        value = super().convert(value, param, ctx)
+        raw_value = v
+        path_value = super().convert(v, param, ctx)
 
         # The determination of whether or not the path refers to a file or a
         # directory can only be made if the file exists at that path.
-        if value.exists():
+        if path_value.exists():
             # If the provided value refers to a file that exists, we have to
-            # validate the extension.  If the value refers to a directory,
-            # we do not have to validate that the directory exists because
-            # the directory is guaranteed to exist if the file exists.
-            if value.is_file():
-                self.validate_extension(value.suffix, param, ctx)
-
-        # If the path (as a directory or a filepath) does not exist, we only
-        # want to validate the extension in the case that the path refers to
-        # a filepath and has an extension.  If the suffix is an empty string,
-        # that means that the path refers to a directory that does not exist.
-        elif value.suffix != "":
-            self.validate_extension(value.suffix, param, ctx)
+            # validate the extension.  Otherwise, a BadParameter exception
+            # should be raised because the path does not point to a file.
+            if path_value.is_file():
+                # At this point, the extension may be an empty string - but
+                # unlike the case where the file does not exist, we need to
+                # raise a BadParameter exception in the case that this is true.
+                # In the case where the file does not exist, we can try to
+                # infer the extension based on the output types.  But in this
+                # case, the user is trying to reference an already generated
+                # output file that does not have an extension.
+                self.validate_extension(path_value.suffix, param, ctx)
+                value = OutputFile(
+                    path=path_value,
+                    raw_value=raw_value
+                )
+            else:
+                self.fail(
+                    f"The provided value {str(path_value)} is a directory.",
+                    param,
+                    ctx
+                )
+        # If the path does not exist, only validate the extension in the case
+        # that there is an extension.  Otherwise, we will try to infer the
+        # extension based on the output types.
+        elif path_value.suffix != "":
+            self.validate_extension(path_value.suffix, param, ctx)
+            value = OutputFile(
+                path=path_value,
+                raw_value=raw_value
+            )
         else:
+            # Here, the extension will be inferred based on the output types
+            # provided.
+            value = OutputFile(
+                path=path_value,
+                raw_value=raw_value,
+                infer_ext_from_output_type=True
+            )
+
             # TODO: Figure out how to make it so that when output types are
             # provided, the extension isn't required on a file and it can be
             # just a name.

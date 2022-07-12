@@ -1,6 +1,44 @@
+import contextlib
+import os
 import pathlib
+import subprocess
 
+from git_blame_project.stdout import warning
 from git_blame_project.utils import humanize_list
+
+
+@contextlib.contextmanager
+def repository_directory_context(repository):
+    original_dir = os.getcwd()
+    try:
+        os.chdir(str(repository))
+        yield None
+    finally:
+        os.chdir(original_dir)
+
+
+def get_git_branch(repository):
+    with repository_directory_context(repository):
+        result = subprocess.check_output(['git', 'branch'])
+        try:
+            result = result.decode("utf-8")
+        except UnicodeDecodeError:
+            warning(
+                "There was an error determining the current git branch for "
+                "purposes of auto-generating a filename.  A placeholder value "
+                "will be used."
+            )
+            return "unknown"
+        lines = [r.strip() for r in result.split("\n")]
+        for line in lines:
+            if line.startswith("*"):
+                return line.split("*")[1].strip()
+        warning(
+            "There was an error determining the current git branch for "
+            "purposes of auto-generating a filename.  A placeholder value "
+            "will be used."
+        )
+        return "unknown"
 
 
 class LocationContext:
