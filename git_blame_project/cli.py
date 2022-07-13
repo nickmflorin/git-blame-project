@@ -5,7 +5,7 @@ import click
 import git_blame_project
 
 from .constants import HelpText
-from .models import Blame, BlameLine
+from .blame import Blame, BlameLine
 from .types import (
     RootParamType, CommaSeparatedListType, OutputFileType, OutputFileDirType,
     OutputTypeType)
@@ -45,5 +45,4 @@ def main(repository, **kwargs):
     )
     blamed()
     results = blamed.get_contributions_by_line()
-    blamed.output()
     print(results)

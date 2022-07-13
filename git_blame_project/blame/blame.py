@@ -5,10 +5,11 @@ import pathlib
 
 import click
 
-from git_blame_project import constants
+from git_blame_project.models import OutputType, OutputTypes
 
 from .blame_file import BlameFile
 from .blame_line import BlameLine
+from .constants import DEFAULT_IGNORE_DIRECTORIES, DEFAULT_IGNORE_FILE_TYPES
 from .exceptions import BlameFileParserError
 from .git_env import (
     get_git_branch, repository_directory_context, LocationContext)
@@ -25,6 +26,18 @@ class Blame:
         self._outputcols = kwargs.pop('outputcols', None)
         self._outputdir = kwargs.pop('outputdir', None)
         self._outputfile = kwargs.pop('outputfile', None)
+        self._outputtype = kwargs.pop('outputtype', None)
+
+    def __call__(self):
+        setattr(self, '_files', [])
+
+        # We must physically move to the directory that the repository is
+        # located in such that we can access the `git` command line tools.
+        with repository_directory_context(self.repository):
+            self._perform_blame()
+
+        if self.should_output:
+            self.output()
 
     @property
     def files(self):
@@ -54,14 +67,24 @@ class Blame:
     @property
     def ignore_dirs(self):
         if self._ignore_dirs is not None:
-            return self._ignore_dirs + constants.DEFAULT_IGNORE_DIRECTORIES
-        return constants.DEFAULT_IGNORE_DIRECTORIES
+            return self._ignore_dirs + DEFAULT_IGNORE_DIRECTORIES
+        return DEFAULT_IGNORE_DIRECTORIES
 
     @property
     def outputcols(self):
         if self._outputcols is None:
             return [p.name for p in BlameLine.parse_attributes]
         return self._outputcols
+
+    @property
+    def outputtype(self):
+        if self._outputtype is not None:
+            return self._outputtype
+        elif self._outputfile is not None:
+            return OutputTypes.from_extensions(self._outputfile.extension)
+        # TODO: Should we return the default?  Or should this represent a case
+        # where we do not output?
+        return OutputTypes.all()
 
     @classmethod
     def transform_file_types(cls, file_types):
@@ -77,8 +100,8 @@ class Blame:
     def ignore_file_types(self):
         if self._ignore_file_types is not None:
             return self.transform_file_types(
-                self._ignore_file_types + constants.DEFAULT_IGNORE_FILE_TYPES)
-        return self.transform_file_types(constants.DEFAULT_IGNORE_FILE_TYPES)
+                self._ignore_file_types + DEFAULT_IGNORE_FILE_TYPES)
+        return self.transform_file_types(DEFAULT_IGNORE_FILE_TYPES)
 
     @property
     def outputdir(self):
@@ -87,36 +110,41 @@ class Blame:
         return self._outputdir
 
     @property
-    def default_outputfile(self):
-        branch_name = get_git_branch(self.repository)
-        return f"{self.outputdir.parts[-1]}-{branch_name}.csv"
+    def should_output(self):
+        return self._outputdir is not None or self._outputfile is not None \
+            or self._outputtype is not None
 
-    @property
-    def outputfile(self):
+    def default_outputfile(self, output_type):
+        branch_name = get_git_branch(self.repository)
+        return OutputType.for_slug(output_type).format_filename(
+            f"{self.outputdir.parts[-1]}-{branch_name}")
+
+    def outputfile(self, output_type):
         # The output file is guaranteed to be an existing directory or a file
         # that may or may not exist, but in a parent directory that does exist.
-        if self._outputfile is None:
-            return self.outputdir / self.default_outputfile
-        elif self._outputfile.is_dir():
-            return self._outputfile / self.default_outputfile
-        return self._outputfile
+        if self._outputfile is not None:
+            return self._outputfile.filepath(output_type)
+        return self.outputdir / self.default_outputfile(output_type)
 
-    def __call__(self):
-        setattr(self, '_files', [])
-
-        # We must physically move to the directory that the repository is
-        # located in such that we can access the `git` command line tools.
-        with repository_directory_context(self.repository):
-            self._perform_blame()
-        self.output()
-
-    def output(self):
-        click.echo(f"Writing to {str(self.outputfile)}")
-        with open(str(self.outputfile), 'w') as csvfile:
+    def output_csv(self):
+        output_file = self.outputfile('csv')
+        click.echo(f"Writing to {str(output_file)}")
+        with open(str(output_file), 'w') as csvfile:
             writer = csv.writer(csvfile, delimiter=',')
             writer.writerow([attr.title for attr in BlameLine.parse_attributes])
             for file in self.files:
                 writer.writerows(file.csv_rows(self.outputcols))
+
+    def output_excel(self):
+        print("Not yet suppored")
+
+    def output(self):
+        output_mapping = {
+            OutputTypes.CSV.slug: self.output_csv,
+            OutputTypes.EXCEL.slug: self.output_excel,
+        }
+        for output_type in self.outputtype:
+            output_mapping[output_type.slug]()
 
     def _perform_blame(self):
         blame_count = 0

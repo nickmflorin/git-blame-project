@@ -2,10 +2,9 @@ import re
 
 import click
 
-from git_blame_project import constants
-
 from .attributes import (
     ParsedAttribute, IntegerParsedAttribute, DateTimeParsedAttribute)
+from .constants import REGEX_STRING
 from .exceptions import BlameLineParserError, BlameLineAttributeParserError
 from .git_env import LocationContextExtensible
 
@@ -45,7 +44,7 @@ class BlameLine(LocationContextExtensible):
 
     @data.setter
     def data(self, value):
-        regex_result = re.search(constants.REGEX_STRING, value)
+        regex_result = re.search(REGEX_STRING, value)
         if regex_result is None:
             # Sometimes, the result of the git-blame will be an empty string.
             # We should just ignore those for now.
