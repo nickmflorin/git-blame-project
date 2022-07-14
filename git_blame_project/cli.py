@@ -30,10 +30,22 @@ def cli():
 @click.option('--file_limit', '-fl', type=int, help=HelpText.FILE_LIMIT)
 @click.option('--analysis', type=AnalysisType(), help=HelpText.ANALYSIS)
 @click.option('--output_type', type=OutputTypeType(), help=HelpText.OUTPUT_TYPE)
-@click.option('--output_file', type=OutputFileType(), help="")
-@click.option('--output_dir', type=OutputFileDirType(exists=True), help="")
-@click.option('--ignore_dirs', type=CommaSeparatedListType(), help="")
-@click.option('--ignore_file_types', type=CommaSeparatedListType(), help="")
+@click.option('--output_file', type=OutputFileType(), help=HelpText.OUTPUT_FILE)
+@click.option(
+    '--output_dir',
+    type=OutputFileDirType(exists=True),
+    help=HelpText.OUTPUT_DIR
+)
+@click.option(
+    '--ignore_dirs',
+    type=CommaSeparatedListType(),
+    help=HelpText.IGNORE_DIRS
+)
+@click.option(
+    '--ignore_file_types',
+    type=CommaSeparatedListType(),
+    help=HelpText.IGNORE_FILE_TYPES
+)
 @click.option('--line_blame_columns', type=CommaSeparatedListType(
     choices=[p.name for p in BlameLine.parse_attributes]
 ), help=HelpText.LINE_BLAME_COLUMS)

@@ -3,7 +3,7 @@
 A CLI tool for applying `blame` to an entire repository or project in order to
 gain insights about the static contributions of a project.
 
-**Note: This project is actively being developed, and is not ready to be used yet.**
+**Note: This project is actively being developed.  As such, it is not perfect - yet.**
 
 ## Motivation
 
@@ -45,6 +45,58 @@ file in a project or a desired subsection of that project.
 
 ## Usage
 
+To run [git-blame-project](https://github.com/nickmflorin/git-blame-project),
+simply use the following command:
+
 ```bash
 $ git-blame-project <path_to_my_repository>
 ```
+
+Currently, the `<path_to_my_repository>` must be the path to the **root** of the
+[Github](https://github.com/) for which you would like to run the tool.  If the
+path does not exist, is not a [Github](https://github.com/) repository or is
+not the **root** of the [Github](https://github.com/) repository, an error
+will be raised.
+
+### Arguments
+
+There are several arguments which allow you to customize the tool's usage
+and analysis.
+
+#### `analysis`
+
+The `--analysis` argument is used to inform the tool what analyses you would
+like to perform.  The `--analysis` argument can be provided as a single value or
+multiple values, but all value(s) must refer to the slug of an implemented
+analysis type.
+
+Multiple values are provided as a string of comma separated values:
+
+```bash
+$ git-blame-project <path_to_my_repository> --analysis=line_blame,contributions_by_line
+```
+
+Currently, there are (2) analysis types: `line_blame` and `contributions_by_line`.
+
+##### `line_blame` Analysis
+
+This analysis type analyzes the blame of every line in the project and outputs
+data that optionally shows the contributor of every line, the commit number,
+the date and time at which the commit happened, the line of code itself and
+the line number of the line in the file.
+
+##### `line_blame_columns`
+
+The `--line_blame_columns` argument defines what columns should be used to
+display the tabular data in the output of this analysis.  The
+`--line_blame_columns` argument can be provided as a single value or multiple
+values, but all value(s) must refer to a valid column.
+
+Multiple values are provided as a string of comma separated values:
+
+```bash
+$ git-blame-project <path_to_my_repository> --line_blame_columns=code,datetime
+```
+
+**Valid Values**: code, datetime, contributor, line_no, commit
+**Default Value**: `code,datetime,contributor,line_no,commit`

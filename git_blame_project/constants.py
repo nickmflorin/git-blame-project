@@ -1,3 +1,4 @@
+from .blame import Analyses
 from .models import OutputTypes
 
 
@@ -9,6 +10,17 @@ class HelpText:
     LINE_BLAME_COLUMS = (
         "The columns that should be included in the tabular output of the "
         "line blame analysis."
+    )
+    IGNORE_DIRS = (
+        "Directory names that should be ignored if the file is located inside "
+        "them.  Can be a single or multiple values.  If a file exists in any "
+        "parent directory with a name included in this option, the file will "
+        "be ignored."
+    )
+    IGNORE_FILE_TYPES = (
+        "File types that should be ignored a file of that type is encountered. "
+        "Can be a single or multiple values.  Should be specified as a file "
+        "extension (or several file extensions), with or without the period."
     )
     OUTPUT_FILE = (
         "The name or path of the file that the output will be saved to.  Only "
@@ -34,4 +46,9 @@ class HelpText:
         "output file.  If this cannot be done, the output will only be "
         "displayed via stdout, but will not be saved to a file."
     )
-    ANALYSIS = ""
+    ANALYSIS = (
+        "The type of analyses that should be performed with the project blame. "
+        "Can be a single value or multiple values.  Valid values are "
+        f"{Analyses.HUMANIZED}. If omitted, the analysis that will be performed "
+        "by default is `line_blame`."
+    )

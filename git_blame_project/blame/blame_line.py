@@ -9,6 +9,7 @@ from .exceptions import BlameLineParserError, BlameLineAttributeParserError
 from .git_env import LocationContextExtensible
 
 
+# TODO: ADD WAY TO INCLUDE FILE IN OUTPUT DATA
 class BlameLine(LocationContextExtensible):
     parse_attributes = [
         ParsedAttribute('commit', 0, title='Commit'),
