@@ -8,7 +8,7 @@ from .constants import HelpText
 from .blame import Blame, BlameLine
 from .types import (
     RootParamType, CommaSeparatedListType, OutputFileType, OutputFileDirType,
-    OutputTypeType)
+    OutputTypeType, AnalysisType)
 
 
 def welcome_message():
@@ -27,22 +27,17 @@ def cli():
 
 @cli.command()
 @click.argument('repository', type=RootParamType(exists=True))
-@click.option('--filelimit', '-fl', type=int, help=HelpText.FILE_LIMIT)
-@click.option('--outputtype', type=OutputTypeType(), help=HelpText.OUTPUT_TYPE)
-@click.option('--outputfile', type=OutputFileType(), help="")
-@click.option('--outputdir', type=OutputFileDirType(exists=True), help="")
-@click.option('--outputcols', type=CommaSeparatedListType(
+@click.option('--file_limit', '-fl', type=int, help=HelpText.FILE_LIMIT)
+@click.option('--analysis', type=AnalysisType(), help=HelpText.ANALYSIS)
+@click.option('--output_type', type=OutputTypeType(), help=HelpText.OUTPUT_TYPE)
+@click.option('--output_file', type=OutputFileType(), help="")
+@click.option('--output_dir', type=OutputFileDirType(exists=True), help="")
+@click.option('--ignore_dirs', type=CommaSeparatedListType(), help="")
+@click.option('--ignore_file_types', type=CommaSeparatedListType(), help="")
+@click.option('--line_blame_columns', type=CommaSeparatedListType(
     choices=[p.name for p in BlameLine.parse_attributes]
-), help=HelpText.OUTPUT_COLS)
+), help=HelpText.LINE_BLAME_COLUMS)
 def main(repository, **kwargs):
     welcome_message()
-    blamed = Blame(
-        repository,
-        ignore_dirs=["migrations", ".git"],
-        ignore_file_types=[
-            "woff", "woff2", "eot", "ttf", "svg", ".lock", ".json"],
-        **kwargs
-    )
+    blamed = Blame(repository, **kwargs)
     blamed()
-    results = blamed.get_contributions_by_line()
-    print(results)

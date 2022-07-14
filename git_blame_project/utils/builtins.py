@@ -1,3 +1,6 @@
+import importlib
+
+
 def humanize_list(value, callback=str, conjunction='and', oxford_comma=True):
     """
     Turns an interable list into a human readable string.
@@ -25,4 +28,14 @@ def iterable_from_args(*args, cast=list, strict=True):
             return cast(args[0])
         return cast([args[0]])
     else:
-        return cast([args[:]])
+        return cast(args[:])
+
+
+def import_at_module_path(module_path):
+    """
+    Imports the class or function at the provided module path.
+    """
+    module_name = ".".join(module_path.split(".")[:-1])
+    class_name = module_path.split(".")[-1]
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)

@@ -12,6 +12,9 @@ class BlameFile(LocationContextExtensible):
         super().__init__(**kwargs)
         self._lines = lines
 
+    def __str__(self):
+        return f"<BlameFile path={str(self.context.repository_file_path)}>"
+
     @property
     def lines(self):
         return self._lines

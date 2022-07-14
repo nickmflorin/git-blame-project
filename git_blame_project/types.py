@@ -1,9 +1,21 @@
 import pathlib
 import click
 
-from .constants import OutputTypes
-from .models import OutputFile
-from .stdout import inconsistent_output_location_warning
+from .blame import Analyses
+from .models import OutputFile, OutputTypes
+from .stdout import warning
+
+
+def inconsistent_output_location_warning(outputdir, outputfile):
+    warning(
+        f"The output directory {str(outputdir)} is inconsistent "
+        f"with the location of the provided output file, "
+        f"{str(outputfile)}.  Remember, only one of the output "
+        "file or the output directory are used. \n"
+        f"The provided output directory {str(outputdir)} will be "
+        "ignored as the location defined by the output file "
+        "will be used."
+    )
 
 
 class PathType(click.Path):
@@ -152,7 +164,7 @@ class OutputFileType(PathType):
             assert outputdir.is_dir() and outputdir.exists(), \
                 "The output directory should be validated as a valid " \
                 "directory that exists."
-            if outputfile.path.parent != outputdir:
+            if outputfile.directory != outputdir:
                 inconsistent_output_location_warning(outputdir, outputfile)
         return outputfile
 
@@ -165,7 +177,7 @@ class CommaSeparatedListType(click.types.StringParamType):
 
     def convert(self, value, param, ctx):
         value = super().convert(value, param, ctx)
-        results = [a.strip() for a in value.split(',')]
+        results = set([a.strip() for a in value.split(',')])
         if self._choices is not None:
             validated = []
             choices_type = click.types.Choice(
@@ -178,7 +190,30 @@ class CommaSeparatedListType(click.types.StringParamType):
         return results
 
 
-class OutputTypeType(CommaSeparatedListType):
+class MultipleSlugType(CommaSeparatedListType):
+    def __init__(self, *args, **kwargs):
+        kwargs.update(
+            choices=[option.slug for option in self.plural_slug_cls.__ALL__],
+            case_sensitive=False
+        )
+        super().__init__(*args, **kwargs)
+
+    def convert(self, value, param, ctx):
+        validated_choices = super().convert(value, param, ctx)
+        return self.plural_slug_cls(*validated_choices)
+
+    @property
+    def plural_slug_cls(self):
+        raise NotImplementedError()
+
+
+class AnalysisType(MultipleSlugType):
+    plural_slug_cls = Analyses
+
+
+class OutputTypeType(MultipleSlugType):
+    plural_slug_cls = OutputTypes
+
     def __init__(self, *args, **kwargs):
         kwargs.update(
             choices=[ot.slug for ot in OutputTypes.__ALL__],
@@ -187,8 +222,7 @@ class OutputTypeType(CommaSeparatedListType):
         super().__init__(*args, **kwargs)
 
     def convert(self, value, param, ctx):
-        validated_choices = super().convert(value, param, ctx)
-        output_types = OutputTypes(*validated_choices)
+        output_types = super().convert(value, param, ctx)
         # The outputfile will only not be in the context params if it was not
         # specified or specified after the outputtype argument.  If it was
         # specified after the outputtype argument, this validation must be
@@ -199,6 +233,5 @@ class OutputTypeType(CommaSeparatedListType):
             # The extension will be an empty string if we are inferring the
             # extension based on the output types.
             if outputfile.extension != "":
-                output_types.validate_file_extension(
-                    outputfile.path.suffix, ctx, param)
+                output_types.validate_file_extension(outputfile.path, ctx, param)
         return output_types

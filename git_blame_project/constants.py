@@ -6,7 +6,10 @@ class HelpText:
         "If this value is set, the blame will only parse files up until this "
         "number has been reached."
     )
-    OUTPUT_COLS = "The columns that should be included in any tabular output."
+    LINE_BLAME_COLUMS = (
+        "The columns that should be included in the tabular output of the "
+        "line blame analysis."
+    )
     OUTPUT_FILE = (
         "The name or path of the file that the output will be saved to.  Only "
         "applicable for commands that only generate one output file.\n"
@@ -31,3 +34,4 @@ class HelpText:
         "output file.  If this cannot be done, the output will only be "
         "displayed via stdout, but will not be saved to a file."
     )
+    ANALYSIS = ""
