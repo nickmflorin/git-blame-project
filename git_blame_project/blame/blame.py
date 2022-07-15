@@ -117,7 +117,6 @@ class Blame:
                     continue
 
                 file_path = file_dir / name
-                print(file_path)
                 if file_path.suffix.lower() in self.ignore_file_types:
                     continue
 

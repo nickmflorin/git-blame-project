@@ -114,3 +114,95 @@ is present in the files being analyzed and outputs tabular data that shows
 the relative contributions of each contributor as a percentage.  The number of
 lines each contributor is responsible for relative to the total number of lines
 for all the files being analyzed.
+
+#### `output_type`
+
+The `--output_type` argument is used to inform the tool how the results for
+each analysis should be outputted.  The `--output_type` argument can be provided
+as a single value or multiple values, but all value(s) must refer to a valid
+`output_type`.
+
+Multiple values are provided as a string of comma separated values:
+
+```bash
+$ git-blame-project <path_to_my_repository> --output_type=csv,excel
+```
+
+**Valid Values**: csv, excel
+**Default Value**: `csv`
+
+Currently, there are (2) supported `output_type`(s): `csv` and `excel`.
+
+If the `output_type` is not provided, it will be inferred from the provided
+`--output_file` argument.  If it cannot be inferred, either because the
+`--output_file` argument was not provided or it does not have an extension,
+the default value will be used.
+
+#### `output_file`
+
+The `--output_file` argument informs the tool where the output data from the
+analysis should be saved.  It can be provided in the following forms:
+
+1. The full file path with an extension.
+2. The full file path without an extension.
+3. Just the file name with an extension.
+4. Just the file name without an extension.
+
+If the `--output_file` argument is not provided, a default filename will be
+used and it will be saved in the directory specfied by the `--output-dir`
+argument (if it is provided) or in the root directory of where the tool is
+being used.
+
+##### Extension
+
+If the extension is provided, it will be used to infer the `--output_type`
+argument in the case that it is not provided.  If the `--output_type` is provided
+but it is inconsistent with the extension of the provided `--output_file`
+argument, a warning will be issued - but the correct extension will still be
+used.
+
+For example, the following would result in a warning being issued but an
+output file saved at `/users/john/data/file.csv`:
+
+```bash
+$ git-blame-project <path_to_my_repository> --output_file=/users/john/data/file.xlsx --output_type=csv
+```
+
+If multiple values are specified for the `--output_type` but only one extension
+is used for the `--output_file` argument, it is okay - the files will still
+be saved with the correct extension.
+
+For example, the following would result in a warning being issued but
+output files saved at `/users/john/data/file.csv` and `/users/john/data/file.xlsx`:
+
+```bash
+$ git-blame-project <path_to_my_repository> --output_file=/users/john/data/file.xlsx --output_type=csv,excel
+```
+
+If the extension is not provided, it will be inferred based on the `--output_type`
+argument.  If the `--output_type` argument is not provided, the `output_type` will
+default to `csv` in which case the inferred extension will be `csv`.
+
+##### Full Path
+
+If the full file path is not provided, the file will either be saved at
+the root of the current directory or in the directory defined by the
+`--output_dir` argument if it is provided.
+
+If the full file path is provided, the `--output_dir` is not required - and
+providing a `output_dir` that is inconsistent with the file path provided via
+the `--output_file` argument will result in a warning being issued.
+
+If the full file path is provided, an error will be raised if the directory
+that the file is located in does not exist.
+
+#### `output_dir`
+
+The `--output_dir` argument informs the tool where the files for the output
+data that is generated via the analyses should be saved.  If provided, the
+directory must exist.  If it does not, an error will be raised.
+
+It is not necessary to provide the `--output_dir` if the `--output_file`
+argument specifies the full file path of the file that should be used to
+save the resulting data.  If the `--output_dir` argument is provided, and the
+`--output_file` argument is provided as a full path, they must be self-consistent.
