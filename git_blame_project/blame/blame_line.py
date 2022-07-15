@@ -3,15 +3,16 @@ import re
 import click
 
 from .attributes import (
-    ParsedAttribute, IntegerParsedAttribute, DateTimeParsedAttribute)
+    ParsedAttribute, IntegerParsedAttribute, DateTimeParsedAttribute,
+    DependentAttribute)
 from .constants import REGEX_STRING
 from .exceptions import BlameLineParserError, BlameLineAttributeParserError
 from .git_env import LocationContextExtensible
 
 
-# TODO: ADD WAY TO INCLUDE FILE IN OUTPUT DATA
 class BlameLine(LocationContextExtensible):
-    parse_attributes = [
+    # TODO: Figure out how to include the file path and name in the attributes.
+    attributes = [
         ParsedAttribute('commit', 0, title='Commit'),
         ParsedAttribute('contributor', 1, title='Contributor'),
         IntegerParsedAttribute('line_no', 9, title='Line No.'),
@@ -20,6 +21,11 @@ class BlameLine(LocationContextExtensible):
             regex_index=[2, 3, 4, 5, 6, 7],
             critical=False,
             title='Date/Time'
+        ),
+        DependentAttribute(
+            name='date',
+            title='Date',
+            parse=lambda attrs: attrs['datetime'].date()
         ),
         ParsedAttribute('code', 10, title='Code'),
     ]
@@ -40,6 +46,14 @@ class BlameLine(LocationContextExtensible):
         return f"<Line contributor={self.contributor} code={self.code}>"
 
     @property
+    def parsed_attributes(self):
+        return [a for a in self.attributes if isinstance(a, ParsedAttribute)]
+
+    @property
+    def dependent_attributes(self):
+        return [a for a in self.attributes if isinstance(a, DependentAttribute)]
+
+    @property
     def data(self):
         return self._data
 
@@ -56,7 +70,11 @@ class BlameLine(LocationContextExtensible):
                 silent=silent
             )
         groups = regex_result.groups()
-        for attr in self.parse_attributes:
+
+        # First, we parse the raw values that are derived directly from the
+        # regex string.
+        parsed_values = {}
+        for attr in self.parsed_attributes:
             try:
                 parsed_value = attr.parse(value, groups, self.context)
             except BlameLineAttributeParserError as e:
@@ -69,6 +87,12 @@ class BlameLine(LocationContextExtensible):
                     raise e
             else:
                 setattr(self, attr.name, parsed_value)
+                parsed_values[attr.name] = parsed_value
+        # Now that we have the parsed values from the regex string, we
+        # determine what the dependent attribute values are, as those depend
+        # on the parsed attributes.
+        for attr in self.dependent_attributes:
+            setattr(self, attr.name, attr.parse(parsed_values))
 
     def csv_row(self, output_cols):
         return [getattr(self, c) for c in output_cols]

@@ -150,7 +150,7 @@ class LineBlameAnalysis(Analysis):
             rows += file.csv_rows(blame.line_blame_columns)
         return TabularData(
             header=[
-                attr.title for attr in BlameLine.parse_attributes
+                attr.title for attr in BlameLine.attributes
                 if attr.name in blame.line_blame_columns
             ],
             rows=rows

@@ -1,21 +1,60 @@
+from abc import ABC, abstractmethod
+
 from git_blame_project.utils import ensure_datetime, DateTimeValueError
 from .exceptions import BlameLineAttributeParserError
 
 
-class ParsedAttribute:
-    def __init__(self, name, regex_index, title, critical=True):
-        self._name = name
+class LineAttribute(ABC):
+    def __init__(self, name, title):
         self._title = title
-        self._regex_index = regex_index
-        self._critical = critical
+        self._name = name
+
+    @property
+    def title(self):
+        return self._title
 
     @property
     def name(self):
         return self._name
 
-    @property
-    def title(self):
-        return self._title
+    @abstractmethod
+    def parse(self, *args, **kwargs):
+        pass
+
+
+class DependentAttribute(LineAttribute):
+    def __init__(self, name, title, **kwargs):
+        super().__init__(name, title)
+        if not hasattr(self, 'parse') and 'parse' not in kwargs:
+            raise TypeError(
+                "A dependent attribute must either define a `parse` method "
+                "statically on the class or be provided with the method "
+                "on initialization."
+            )
+        self._parse = kwargs.get('parse', None)
+
+    def parse(self, parsed_attributes):
+        if self._parse is None:
+            if type(self) is DependentAttribute:
+                # We should not get to this point, but it is cleaner to raise
+                # an exception here instead of making an assertion.
+                raise TypeError(
+                    "The `parse` method should have been provided on "
+                    "initialization."
+                )
+            else:
+                raise TypeError(
+                    f"The `parse` method of the base {DependentAttribute} "
+                    f"class should not be called from {self.__class__}."
+                )
+        return self._parse(parsed_attributes)
+
+
+class ParsedAttribute(LineAttribute):
+    def __init__(self, name, regex_index, title, critical=True):
+        super().__init__(name, title)
+        self._regex_index = regex_index
+        self._critical = critical
 
     def fail(self, data, context, **kwargs):
         raise BlameLineAttributeParserError(

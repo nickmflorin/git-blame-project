@@ -76,14 +76,20 @@ Multiple values are provided as a string of comma separated values:
 $ git-blame-project <path_to_my_repository> --analysis=line_blame,contributions_by_line
 ```
 
+**Valid Values**: line_blame, contributions_by_line
+**Default Value**: `line_blame`
+
 Currently, there are (2) analysis types: `line_blame` and `contributions_by_line`.
 
 ##### `line_blame` Analysis
 
 This analysis type analyzes the blame of every line in the project and outputs
-data that optionally shows the contributor of every line, the commit number,
-the date and time at which the commit happened, the line of code itself and
-the line number of the line in the file.
+tabular data that optionally shows the contributor of every line, the commit
+number, the date and time at which the commit happened, the line of code itself
+and the line number of the line in the file.
+
+If this analysis type is included in the `--analysis` argument, there are
+additional arguments that apply to this analysis that are outlined below:
 
 ##### `line_blame_columns`
 
@@ -100,3 +106,11 @@ $ git-blame-project <path_to_my_repository> --line_blame_columns=code,datetime
 
 **Valid Values**: code, datetime, contributor, line_no, commit
 **Default Value**: `code,datetime,contributor,line_no,commit`
+
+##### `contributions_by_line` Analysis
+
+This analysis type analyzes the relative contributions of each contributor that
+is present in the files being analyzed and outputs tabular data that shows
+the relative contributions of each contributor as a percentage.  The number of
+lines each contributor is responsible for relative to the total number of lines
+for all the files being analyzed.

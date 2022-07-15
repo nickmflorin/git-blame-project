@@ -47,7 +47,7 @@ def cli():
     help=HelpText.IGNORE_FILE_TYPES
 )
 @click.option('--line_blame_columns', type=CommaSeparatedListType(
-    choices=[p.name for p in BlameLine.parse_attributes]
+    choices=[p.name for p in BlameLine.attributes]
 ), help=HelpText.LINE_BLAME_COLUMS)
 def main(repository, **kwargs):
     welcome_message()

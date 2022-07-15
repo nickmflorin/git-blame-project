@@ -56,7 +56,7 @@ class Blame:
     @property
     def line_blame_columns(self):
         if self._line_blame_columns is None:
-            return [p.name for p in BlameLine.parse_attributes]
+            return [p.name for p in BlameLine.attributes]
         return self._line_blame_columns
 
     @property
