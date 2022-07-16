@@ -1,7 +1,8 @@
 import pathlib
 from click.exceptions import BadParameter
 
-from git_blame_project.utils import iterable_from_args, import_at_module_path
+from git_blame_project.utils import (
+    iterable_from_args, import_at_module_path, empty)
 
 from .stdout import warning, TerminalCodes
 from .utils import humanize_list, ImmutableSequence
@@ -74,8 +75,32 @@ class OutputFile:
         return output_type.format_filename(self.path)
 
 
-def SlugModel(plural_model=None, singular_model=None, **options):
+class SlugsConfiguration:
+    def __init__(self, name, required=False, default=empty):
+        self.name = name
+        self.required = required
+        self.default = default
+
+    def parse(self, model, config_data):
+        if config_data is None:
+            value = empty
+        else:
+            value = config_data.get(self.name, empty)
+        if value is empty:
+            value = self.default
+        if value is empty:
+            if self.required:
+                raise TypeError(
+                    f"The configuration {self.name} is required for model "
+                    f"{model}."
+                )
+            return None
+        return value
+
+
+def Slug(plural_model=None, singular_model=None, **options):
     cumulative_options = options.pop('cumulative', None)
+    configurations = options.pop('configurations', [])
 
     if plural_model is None and singular_model is None:
         raise TypeError(
@@ -97,8 +122,8 @@ def SlugModel(plural_model=None, singular_model=None, **options):
             return value.split('.')[-1]
         return value
 
-    class Slugs(ImmutableSequence):
-        def __init__(self, *slugs):
+    class MultipleSlugs(ImmutableSequence):
+        def __init__(self, *slugs, config=None):
             # The singular model class needs to be dynamically referenced in the
             # case that it requires a dynamic import.
             singular_model_cls = to_model(singular_model)
@@ -108,6 +133,13 @@ def SlugModel(plural_model=None, singular_model=None, **options):
             slugs = iterable_from_args(*slugs)
             super().__init__([
                 singular_model_cls.for_slug(s) for s in set(slugs)])
+
+            _configurations = getattr(self, 'configurations', configurations)
+            for c in _configurations:
+                if isinstance(c, dict):
+                    c = SlugsConfiguration(**c)
+                value = c.parse(self.__class__, config)
+                setattr(self, c.name, value)
 
         def __str__(self):
             return humanize_list(self.slugs, conjunction="and")
@@ -144,7 +176,7 @@ def SlugModel(plural_model=None, singular_model=None, **options):
                 raise TypeError(f"Inproper initialization of {reference}.")
         return instance_or_cls.slug
 
-    class Slug:
+    class SingleSlug:
         def __init__(self, *args, **kwargs):
             self._slug = pluck_slug(self, *args, **kwargs)
 
@@ -155,7 +187,7 @@ def SlugModel(plural_model=None, singular_model=None, **options):
                 setattr(cls, 'instances', [])
 
             if slug not in [i.slug for i in cls.instances]:
-                instance = super(Slug, cls).__new__(cls)
+                instance = super(SingleSlug, cls).__new__(cls)
                 instance.__init__(*args, **kwargs)
                 setattr(cls, 'instances', cls.instances + [instance])
             else:
@@ -190,7 +222,7 @@ def SlugModel(plural_model=None, singular_model=None, **options):
         # an import string, but this would mean actually performing the import
         # which can lead to circular imports.
         if isinstance(singular_model, str):
-            return isinstance(model, Slug) \
+            return isinstance(model, SingleSlug) \
                 and model.__name__ == singular_model.split('.')[-1]
         # We cannot assert that type(model) is singular_model because there
         # are cases where we have a base singular model class and then reference
@@ -210,22 +242,25 @@ def SlugModel(plural_model=None, singular_model=None, **options):
                     "of parameters to initialize an instance of "
                     f"{singular_model_ref}."
                 )
-            setattr(Slugs, k.upper(), v)
+            setattr(MultipleSlugs, k.upper(), v)
             __ALL__.append(v)
 
-        setattr(Slugs, '__ALL__', __ALL__)
-        setattr(Slugs, 'HUMANIZED', humanize_list(
+        setattr(MultipleSlugs, '__ALL__', __ALL__)
+        setattr(MultipleSlugs, 'HUMANIZED', humanize_list(
             [m.slug for m in __ALL__], conjunction="or"))
 
         if cumulative_options is not None:
             cumulative_options = cumulative_options(__ALL__)
             for k, v in cumulative_options.items():
-                setattr(Slugs, k.upper(), v)
-        return Slugs
-    return Slug
+                setattr(MultipleSlugs, k.upper(), v)
+        return MultipleSlugs
+    return SingleSlug
 
 
-class OutputType(SlugModel(plural_model='git_blame_project.models.OutputTypes')):
+Slug.Config = SlugsConfiguration
+
+
+class OutputType(Slug(plural_model='git_blame_project.models.OutputTypes')):
     def __init__(self, slug, ext):
         super().__init__(slug)
         self._ext = ext
@@ -244,7 +279,7 @@ class OutputType(SlugModel(plural_model='git_blame_project.models.OutputTypes'))
         return filename.with_suffix(self.ext)
 
 
-class OutputTypes(SlugModel(
+class OutputTypes(Slug(
     singular_model=OutputType,
     csv={'slug': 'csv', 'ext': 'csv'},
     excel={'slug': 'excel', 'ext': 'xlsx'},

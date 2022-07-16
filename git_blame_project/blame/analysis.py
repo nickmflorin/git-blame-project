@@ -2,20 +2,11 @@ import collections
 import csv
 import functools
 
-from git_blame_project.models import SlugModel, OutputTypes, OutputType
+from git_blame_project.models import Slug, OutputTypes, OutputType
 from git_blame_project.stdout import info, not_supported
 
 from .blame_line import BlameLine
 from .git_env import get_git_branch
-
-
-def save_result(func):
-    @functools.wraps(func)
-    def decorated(instance, *args, **kwargs):
-        result = func(instance, *args, **kwargs)
-        setattr(instance, '_result', result)
-        return result
-    return decorated
 
 
 def analyses(cls):
@@ -62,9 +53,7 @@ def analysis(slug):
 TabularData = collections.namedtuple('TabularData', ['header', 'rows'])
 
 
-class Analysis(SlugModel(
-        plural_model='git_blame_project.blame.analysis.Analyses')):
-
+class Analysis(Slug(plural_model='git_blame_project.blame.analysis.Analyses')):
     def count_lines_by_attr(self, attr, formatter=None):
         count = collections.defaultdict(int)
         for file in self.files:
@@ -176,10 +165,17 @@ class ContributionsByLineAnalysis(Analysis):
 
 
 @analyses
-class Analyses(SlugModel(
+class Analyses(Slug(
     singular_model=Analysis,
     line_blame=LineBlameAnalysis(),
-    contributions_by_line=ContributionsByLineAnalysis()
+    contributions_by_line=ContributionsByLineAnalysis(),
+    configurations=[
+        Slug.Config(
+            name='line_blame_columns',
+            required=False,
+            default=[p.name for p in BlameLine.attributes]
+        )
+    ]
 )):
     def __call__(self):
         for a in self:
