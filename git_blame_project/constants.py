@@ -49,6 +49,6 @@ class HelpText:
     ANALYSIS = (
         "The type of analyses that should be performed with the project blame. "
         "Can be a single value or multiple values.  Valid values are "
-        f"{Analyses.HUMANIZED}. If omitted, the analysis that will be performed "
+        f"{Analyses.HUMANIZED}. If omitted, the analyses that will be performed "
         "by default is `line_blame`."
     )

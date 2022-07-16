@@ -17,7 +17,7 @@ class Blame:
     cli_arguments = [
         'ignore_dirs', 'ignore_file_types', 'dry_run', 'file_limit',
         'line_blame_columns', 'output_dir', 'output_file', 'output_type',
-        'analysis'
+        'analyses'
     ]
 
     def __init__(self, repository, **kwargs):
@@ -31,9 +31,9 @@ class Blame:
         with repository_directory_context(self.repository):
             files = self.perform_blame()
 
-        self.analysis(files)
+        self.analyses(files)
         if self.should_output:
-            self.analysis.output(self)
+            self.analyses.output(self)
 
     @property
     def file_limit(self):
@@ -70,10 +70,10 @@ class Blame:
         return OutputTypes.all()
 
     @property
-    def analysis(self):
-        if self._analysis is None:
+    def analyses(self):
+        if self._analyses is None:
             return Analyses(LineBlameAnalysis())
-        return self._analysis
+        return self._analyses
 
     @classmethod
     def transform_file_types(cls, file_types):

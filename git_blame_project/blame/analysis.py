@@ -106,7 +106,7 @@ class Analysis(SlugModel(
         # The output file is guaranteed to be an existing directory or a file
         # that may or may not exist, but in a parent directory that does exist.
         suffix = None
-        if len(blame.analysis) > 1:
+        if len(blame.analyses) > 1:
             if getattr(self, 'output_file_suffix', None):
                 suffix = self.output_file_suffix
             else:

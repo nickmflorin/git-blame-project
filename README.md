@@ -63,17 +63,17 @@ will be raised.
 There are several arguments which allow you to customize the tool's usage
 and analysis.
 
-#### `analysis`
+#### `analyses`
 
-The `--analysis` argument is used to inform the tool what analyses you would
-like to perform.  The `--analysis` argument can be provided as a single value or
+The `--analyses` argument is used to inform the tool what analyses you would
+like to perform.  The `--analyses` argument can be provided as a single value or
 multiple values, but all value(s) must refer to the slug of an implemented
 analysis type.
 
 Multiple values are provided as a string of comma separated values:
 
 ```bash
-$ git-blame-project <path_to_my_repository> --analysis=line_blame,contributions_by_line
+$ git-blame-project <path_to_my_repository> --analyses=line_blame,contributions_by_line
 ```
 
 **Valid Values**: line_blame, contributions_by_line
@@ -104,8 +104,8 @@ Multiple values are provided as a string of comma separated values:
 $ git-blame-project <path_to_my_repository> --line_blame_columns=code,datetime
 ```
 
-**Valid Values**: code, datetime, contributor, line_no, commit
-**Default Value**: `code,datetime,contributor,line_no,commit`
+**Valid Values**: code, datetime, contributor, line_no, commit, file_name, file_path
+**Default Value**: `file_name,file_path,code,datetime,contributor,line_no,commit`
 
 ##### `contributions_by_line` Analysis
 

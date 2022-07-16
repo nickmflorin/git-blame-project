@@ -28,7 +28,7 @@ def cli():
 @cli.command()
 @click.argument('repository', type=RootParamType(exists=True))
 @click.option('--file_limit', '-fl', type=int, help=HelpText.FILE_LIMIT)
-@click.option('--analysis', type=AnalysisType(), help=HelpText.ANALYSIS)
+@click.option('--analyses', type=AnalysisType(), help=HelpText.ANALYSIS)
 @click.option('--output_type', type=OutputTypeType(), help=HelpText.OUTPUT_TYPE)
 @click.option('--output_file', type=OutputFileType(), help=HelpText.OUTPUT_FILE)
 @click.option(
