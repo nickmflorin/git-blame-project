@@ -42,7 +42,7 @@ def get_git_branch(repository):
 
 
 class LocationContext:
-    attrs = ["repository", "repository_path", "name"]
+    attrs = ["repository", "repository_path", "file_name"]
 
     def __init__(self, **kwargs):
         if 'context' in kwargs:
@@ -53,23 +53,27 @@ class LocationContext:
                 )
             self._repository = kwargs['context'].repository
             self._repository_path = kwargs['context'].repository_path
-            self._name = kwargs['context'].name
+            self._file_name = kwargs['context'].file_name
         else:
             missing_kwargs = [a for a in self.attrs if a not in kwargs]
             if missing_kwargs:
-                humanized = humanize_list(missing_kwargs)
-                raise ValueError(f"The parameters {humanized} are required.")
+                if len(missing_kwargs) == 1:
+                    raise TypeError(
+                        f"The parameter `{missing_kwargs[0]}` is required.")
+                else:
+                    humanized = humanize_list([f"`{a}`" for a in missing_kwargs])
+                    raise ValueError(f"The parameters {humanized} are required.")
 
             self._repository = kwargs['repository']
             self._repository_path = kwargs['repository_path']
-            self._name = kwargs['name']
+            self._file_name = kwargs['file_name']
 
     def __str__(self):
         return self.full_name
 
     @property
-    def name(self):
-        return self._name
+    def file_name(self):
+        return self._file_name
 
     @property
     def repository(self):
@@ -89,11 +93,11 @@ class LocationContext:
 
     @property
     def absolute_file_path(self):
-        return self.absolute_path / self.name
+        return self.absolute_path / self.file_name
 
     @property
     def repository_file_path(self):
-        return self.repository_path / self.name
+        return self.repository_path / self.file_name
 
     @property
     def absolute_name(self):
@@ -110,5 +114,5 @@ class LocationContextExtensible(LocationContext):
         return LocationContext(
             repository=self._repository,
             repository_path=self._repository_path,
-            name=self._name
+            file_name=self._file_name
         )

@@ -107,16 +107,16 @@ class Blame:
         blame_count = 0
         blame_files = []
         for path, _, files in os.walk(self.repository):
-            for name in files:
+            for file_name in files:
                 # This seems to be happening occasionally with paths that are
                 # in directories that typically should be ignored (like .git).
-                if name == "None":
+                if file_name == "None":
                     continue
                 file_dir = pathlib.Path(path)
                 if any([p in self.ignore_dirs for p in file_dir.parts]):
                     continue
 
-                file_path = file_dir / name
+                file_path = file_dir / file_name
                 if file_path.suffix.lower() in self.ignore_file_types:
                     continue
 
@@ -124,7 +124,7 @@ class Blame:
                 context = LocationContext(
                     repository=self.repository,
                     repository_path=repository_path,
-                    name=name
+                    file_name=file_name
                 )
                 blamed_file = BlameFile.create(context)
                 if isinstance(blamed_file, BlameFileParserError):

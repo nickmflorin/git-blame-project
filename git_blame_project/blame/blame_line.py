@@ -4,15 +4,21 @@ import click
 
 from .attributes import (
     ParsedAttribute, IntegerParsedAttribute, DateTimeParsedAttribute,
-    DependentAttribute)
+    DependentAttribute, ExistingLineAttribute)
 from .constants import REGEX_STRING
 from .exceptions import BlameLineParserError, BlameLineAttributeParserError
 from .git_env import LocationContextExtensible
 
 
 class BlameLine(LocationContextExtensible):
-    # TODO: Figure out how to include the file path and name in the attributes.
     attributes = [
+        ExistingLineAttribute(name='file_name', title='File Name'),
+        ExistingLineAttribute(
+            attr='repository_file_path',
+            name='file_path',
+            title='File Path',
+            formatter=lambda v: str(v)
+        ),
         ParsedAttribute('commit', 0, title='Commit'),
         ParsedAttribute('contributor', 1, title='Contributor'),
         IntegerParsedAttribute('line_no', 9, title='Line No.'),
@@ -25,13 +31,14 @@ class BlameLine(LocationContextExtensible):
         DependentAttribute(
             name='date',
             title='Date',
-            parse=lambda attrs: attrs['datetime'].date()
+            parse=lambda params: params['datetime'].date()
         ),
         ParsedAttribute('code', 10, title='Code'),
     ]
 
     def __init__(self, data, **kwargs):
         super().__init__(**kwargs)
+        self._data = data
         self.data = data
 
     def __new__(cls, data, **kwargs):
@@ -43,7 +50,10 @@ class BlameLine(LocationContextExtensible):
         return instance
 
     def __str__(self):
-        return f"<Line contributor={self.contributor} code={self.code}>"
+        return f"<Line {self.data}>"
+
+    def __repr__(self):
+        return f"<Line {self.data}>"
 
     @property
     def parsed_attributes(self):
@@ -86,13 +96,18 @@ class BlameLine(LocationContextExtensible):
                     # excluded.
                     raise e
             else:
-                setattr(self, attr.name, parsed_value)
+                attr.save(self, parsed_value)
                 parsed_values[attr.name] = parsed_value
+
         # Now that we have the parsed values from the regex string, we
         # determine what the dependent attribute values are, as those depend
         # on the parsed attributes.
         for attr in self.dependent_attributes:
-            setattr(self, attr.name, attr.parse(parsed_values))
+            if isinstance(attr, ExistingLineAttribute):
+                parsed_value = attr.parse(self)
+            else:
+                parsed_value = attr.parse(parsed_values)
+            attr.save(self, parsed_value)
 
     def csv_row(self, output_cols):
         return [getattr(self, c) for c in output_cols]

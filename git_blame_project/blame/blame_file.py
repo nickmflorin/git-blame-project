@@ -15,6 +15,9 @@ class BlameFile(LocationContextExtensible):
     def __str__(self):
         return f"<BlameFile path={str(self.context.repository_file_path)}>"
 
+    def __repr__(self):
+        return f"<BlameFile path={str(self.context.repository_file_path)}>"
+
     @property
     def lines(self):
         return self._lines

@@ -97,7 +97,8 @@ disable=
   invalid-overridden-method,
   useless-option-value,
   use-a-generator,
-  unspecified-encoding
+  unspecified-encoding,
+  arguments-renamed
 
 
 [REPORTS]
