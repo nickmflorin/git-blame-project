@@ -6,13 +6,13 @@ from .models import OutputFile, OutputTypes
 from .stdout import warning
 
 
-def inconsistent_output_location_warning(outputdir, outputfile):
+def inconsistent_output_location_warning(output_dir, outputfile):
     warning(
-        f"The output directory {str(outputdir)} is inconsistent "
+        f"The output directory {str(output_dir)} is inconsistent "
         f"with the location of the provided output file, "
         f"{str(outputfile)}.  Remember, only one of the output "
         "file or the output directory are used. \n"
-        f"The provided output directory {str(outputdir)} will be "
+        f"The provided output directory {str(output_dir)} will be "
         "ignored as the location defined by the output file "
         "will be used."
     )
@@ -63,7 +63,7 @@ class OutputFileDirType(DirectoryType):
         # (1) Not provided as a CLI argument.
         # (2) Provided as a CLI argument after the `outputfile` argument.
         # This means that in order to issue warnings against potentially
-        # conflicting values of `outputfile` and `outputdir`, we need to perform
+        # conflicting values of `outputfile` and `output_dir`, we need to perform
         # the checks in both extensions of :obj:`click.params.ParamType` classes
         # (associated with each CLI argument) - because the other parameter
         # will only exist in the context params for one of the
@@ -148,24 +148,24 @@ class OutputFileType(PathType):
                 "not exist."
             )
 
-        # The outputdir will not be in the context params if it was either
+        # The output_dir will not be in the context params if it was either
         # (1) Not provided as a CLI argument.
         # (2) Provided as a CLI argument after the `outputfile` argument.
         # This means that in order to issue warnings against potentially
-        # conflicting values of `outputfile` and `outputdir`, we need to perform
+        # conflicting values of `outputfile` and `output_dir`, we need to perform
         # the checks in both extensions of :obj:`click.params.ParamType` classes
         # (associated with each CLI argument) - because the other parameter
         # will only exist in the context params for one of the
         # :obj:`click.params.ParamType` classes, depending on the order of the
         # parameters as they are included as CLI arguments.
-        if 'outputdir' in ctx.params:
+        if 'output_dir' in ctx.params:
             # The output directory is guaranteed to be a directory that exists.
-            outputdir = ctx.params['outputdir']
-            assert outputdir.is_dir() and outputdir.exists(), \
+            output_dir = ctx.params['output_dir']
+            assert output_dir.is_dir() and output_dir.exists(), \
                 "The output directory should be validated as a valid " \
                 "directory that exists."
-            if outputfile.directory != outputdir:
-                inconsistent_output_location_warning(outputdir, outputfile)
+            if outputfile.directory != output_dir:
+                inconsistent_output_location_warning(output_dir, outputfile)
         return outputfile
 
 

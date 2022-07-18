@@ -36,3 +36,8 @@ def warning(message):
 def error(message):
     prefix = TerminalCodes.bold("Error:")
     click.secho(f"{prefix} {message}", fg="red")
+
+
+def log(message):
+    # TODO: We need to implement a logging system.
+    warning(message)

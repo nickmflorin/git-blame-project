@@ -3,11 +3,8 @@ import pathlib
 
 import click
 
-from git_blame_project.models import OutputTypes
-
 from .analysis import Analyses, LineBlameAnalysis
 from .blame_file import BlameFile
-from .blame_line import BlameLine
 from .constants import DEFAULT_IGNORE_DIRECTORIES, DEFAULT_IGNORE_FILE_TYPES
 from .exceptions import BlameFileParserError
 from .git_env import repository_directory_context, LocationContext
@@ -15,10 +12,7 @@ from .git_env import repository_directory_context, LocationContext
 
 class Blame:
     cli_arguments = [
-        'ignore_dirs', 'ignore_file_types', 'dry_run', 'file_limit',
-        'line_blame_columns', 'output_dir', 'output_file', 'output_type',
-        'analyses'
-    ]
+        'ignore_dirs', 'ignore_file_types', 'file_limit', 'analyses']
 
     def __init__(self, repository, **kwargs):
         self._repository = repository
@@ -30,18 +24,11 @@ class Blame:
         # located in such that we can access the `git` command line tools.
         with repository_directory_context(self.repository):
             files = self.perform_blame()
-
         self.analyses(files)
-        if self.should_output:
-            self.analyses.output(self)
 
     @property
     def file_limit(self):
         return self._file_limit
-
-    @property
-    def dry_run(self):
-        return self._dry_run
 
     @property
     def repository(self):
@@ -50,24 +37,8 @@ class Blame:
     @property
     def ignore_dirs(self):
         if self._ignore_dirs is not None:
-            return self._ignore_dirs + DEFAULT_IGNORE_DIRECTORIES
-        return DEFAULT_IGNORE_DIRECTORIES
-
-    @property
-    def line_blame_columns(self):
-        if self._line_blame_columns is None:
-            return [p.name for p in BlameLine.attributes]
-        return self._line_blame_columns
-
-    @property
-    def output_type(self):
-        if self._output_type is not None:
-            return self._output_type
-        elif self._output_file is not None:
-            return OutputTypes.from_extensions(self._output_file.extension)
-        # TODO: Should we return the default?  Or should this represent a case
-        # where we do not output?
-        return OutputTypes.all()
+            return set(self._ignore_dirs + DEFAULT_IGNORE_DIRECTORIES)
+        return set(DEFAULT_IGNORE_DIRECTORIES)
 
     @property
     def analyses(self):
@@ -91,17 +62,6 @@ class Blame:
             return self.transform_file_types(
                 self._ignore_file_types + DEFAULT_IGNORE_FILE_TYPES)
         return self.transform_file_types(DEFAULT_IGNORE_FILE_TYPES)
-
-    @property
-    def output_dir(self):
-        if self._output_dir is None:
-            return pathlib.Path(os.getcwd())
-        return self._output_dir
-
-    @property
-    def should_output(self):
-        return self._output_dir is not None or self._output_file is not None \
-            or self._output_type is not None
 
     def perform_blame(self):
         blame_count = 0

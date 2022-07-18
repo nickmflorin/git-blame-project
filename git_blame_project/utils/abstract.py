@@ -1,12 +1,11 @@
 import collections
 
+from .builtins import iterable_from_args
+
 
 class ImmutableSequence(collections.abc.Sequence):
     def __init__(self, *args):
-        if len(args) == 1 and hasattr(args[0], '__iter__'):
-            self._store = args[0]
-        else:
-            self._store = list(args)
+        self._store = iterable_from_args(*args)
 
     @property
     def data(self):
