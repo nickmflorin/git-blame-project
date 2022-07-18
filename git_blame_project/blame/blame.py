@@ -3,6 +3,8 @@ import pathlib
 
 import click
 
+from git_blame_project.utils import standardize_extensions
+
 from .analysis import Analyses, LineBlameAnalysis
 from .blame_file import BlameFile
 from .constants import DEFAULT_IGNORE_DIRECTORIES, DEFAULT_IGNORE_FILE_TYPES
@@ -46,22 +48,12 @@ class Blame:
             return Analyses(LineBlameAnalysis())
         return self._analyses
 
-    @classmethod
-    def transform_file_types(cls, file_types):
-        transformed = []
-        for file_type in file_types:
-            if not file_type.startswith('.'):
-                transformed.append(f".{file_type.lower()}")
-            else:
-                transformed.append(file_type.lower())
-        return transformed
-
     @property
     def ignore_file_types(self):
         if self._ignore_file_types is not None:
-            return self.transform_file_types(
+            return standardize_extensions(
                 self._ignore_file_types + DEFAULT_IGNORE_FILE_TYPES)
-        return self.transform_file_types(DEFAULT_IGNORE_FILE_TYPES)
+        return standardize_extensions(DEFAULT_IGNORE_FILE_TYPES)
 
     def perform_blame(self):
         blame_count = 0
