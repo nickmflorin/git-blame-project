@@ -14,7 +14,7 @@ from .types import (
 
 def welcome_message():
     message = (
-        f"Welcome to {git_blame_project.__appname__}!\n"
+        f"\nWelcome to {git_blame_project.__appname__}!\n"
         f"{git_blame_project.__copyright__}\n"
         "All Rights Reserved\n\n"
     )

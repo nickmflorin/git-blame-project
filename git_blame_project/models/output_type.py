@@ -1,7 +1,7 @@
 import pathlib
 from click.exceptions import BadParameter
 
-from git_blame_project.stdout import warning, TerminalCodes
+from git_blame_project.stdout import warning, Terminal
 from git_blame_project.utils import (
     iterable_from_args, humanize_list, standardize_extension,
     standardize_extensions, extensions_equal)
@@ -82,11 +82,11 @@ class OutputTypes(Slug(
 
         self.validate_general_file_extension(ext, ctx, param)
         humanized = humanize_list(
-            value=[TerminalCodes.bold(s) for s in self.slugs],
+            value=[Terminal.bold(s) for s in self.slugs],
             conjunction="and"
         )
         humanized_extensions = humanize_list(
-            value=[TerminalCodes.bold(ext) for ext in self.get_extensions()],
+            value=[Terminal.bold(ext) for ext in self.get_extensions()],
             conjunction="and"
         )
         ext = standardize_extension(ext)
@@ -104,8 +104,8 @@ class OutputTypes(Slug(
                 f"output types {humanized}, which will generate files with "
                 f"extensions {humanized_extensions}."
                 "The extension on the provided file type, "
-                f"{TerminalCodes.bold(ext)}, will be ignored, but the filename "
-                "will still be used. \n"
+                f"{Terminal.bold(ext, color='yellow')}, will be ignored, but "
+                "the filename will still be used. \n"
                 "Note: If providing the output types explicitly, it is "
                 "okay to omit the extension from the filename."
             )
@@ -113,13 +113,13 @@ class OutputTypes(Slug(
             outputtype = self[0]
             warning(
                 "The file extension is inconsistent with the provided "
-                f"output type {TerminalCodes.bold(outputtype.slug)}, which "
-                f"will generate a file with extension "
-                f"{TerminalCodes.bold(outputtype.ext)}. "
+                f"output type {Terminal.bold(outputtype.slug, color='yellow')}, "
+                "which will generate a file with extension "
+                f"{Terminal.bold(outputtype.ext)}. "
                 "The extension on the provided file type, "
-                f"{TerminalCodes.bold(ext)}, and the output file will be used "
-                "with the correct extension, "
-                f"{TerminalCodes.bold(outputtype.ext)}.\n"
+                f"{Terminal.bold(ext, color='yellow')}, and the output file "
+                "will be used with the correct extension, "
+                f"{Terminal.bold(outputtype.ext, color='yellow')}.\n"
                 "Note: If providing the output types explicitly, it is "
                 "okay to omit the extension from the filename."
             )
