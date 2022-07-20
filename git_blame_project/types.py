@@ -3,11 +3,11 @@ import click
 
 from .blame import Analyses
 from .models import OutputFile, OutputTypes
-from .stdout import warning
+from .stdout import stdout
 
 
 def inconsistent_output_location_warning(output_dir, outputfile):
-    warning(
+    stdout.warning(
         f"The output directory {str(output_dir)} is inconsistent "
         f"with the location of the provided output file, "
         f"{str(outputfile)}.  Remember, only one of the output "

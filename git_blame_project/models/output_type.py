@@ -1,7 +1,7 @@
 import pathlib
 from click.exceptions import BadParameter
 
-from git_blame_project.stdout import warning, Terminal
+from git_blame_project import stdout
 from git_blame_project.utils import (
     iterable_from_args, humanize_list, standardize_extension,
     standardize_extensions, extensions_equal)
@@ -30,9 +30,11 @@ class OutputType(Slug(plural_model='git_blame_project.models.OutputTypes')):
 
 class OutputTypes(Slug(
     singular_model=OutputType,
-    csv={'slug': 'csv', 'ext': 'csv'},
-    excel={'slug': 'excel', 'ext': 'xlsx'},
-    cumulative=lambda __ALL__: {
+    choices={
+        'csv': OutputType(slug='csv', ext='csv'),
+        'excel': OutputType(slug='excel', ext='xlsx'),
+    },
+    cumulative_attributes=lambda __ALL__: {
         'valid_extensions': set(
             standardize_extensions([ot.ext for ot in __ALL__]))
     }
@@ -82,15 +84,20 @@ class OutputTypes(Slug(
 
         self.validate_general_file_extension(ext, ctx, param)
         humanized = humanize_list(
-            value=[Terminal.bold(s) for s in self.slugs],
+            value=[stdout.bold.format(s) for s in self.slugs],
             conjunction="and"
         )
         humanized_extensions = humanize_list(
-            value=[Terminal.bold(ext) for ext in self.get_extensions()],
+            value=[
+                stdout.bold.format(ext)
+                for ext in self.get_extensions()
+            ],
             conjunction="and"
         )
         ext = standardize_extension(ext)
         extensions = self.get_extensions()
+
+        formatted_ext = stdout.warning.format(ext, bold=True)
         if len(self) > 1 and ext not in extensions:
             # In the case that we are using multiple output types, the
             # filenames will be generated with extensions corresponding to
@@ -99,27 +106,27 @@ class OutputTypes(Slug(
             # will be ignored.  Generally, when providing the output types,
             # the file extension is not required and just the name of the
             # file can be provided.
-            warning(
+            stdout.warning(
                 "The file extension is inconsistent with the provided "
                 f"output types {humanized}, which will generate files with "
                 f"extensions {humanized_extensions}."
                 "The extension on the provided file type, "
-                f"{Terminal.bold(ext, color='yellow')}, will be ignored, but "
-                "the filename will still be used. \n"
+                f"{formatted_ext}, will be ignored, but the filename will "
+                "still be used. \n"
                 "Note: If providing the output types explicitly, it is "
                 "okay to omit the extension from the filename."
             )
         elif ext not in extensions:
             outputtype = self[0]
-            warning(
+            formatted_slug = stdout.warning.format(outputtype.slug, bold=True)
+            formatted_ot_ext = stdout.warning.format(outputtype.ext, bold=True)
+            stdout.warning(
                 "The file extension is inconsistent with the provided "
-                f"output type {Terminal.bold(outputtype.slug, color='yellow')}, "
-                "which will generate a file with extension "
-                f"{Terminal.bold(outputtype.ext)}. "
-                "The extension on the provided file type, "
-                f"{Terminal.bold(ext, color='yellow')}, and the output file "
-                "will be used with the correct extension, "
-                f"{Terminal.bold(outputtype.ext, color='yellow')}.\n"
+                f"output type {formatted_slug}, "
+                f"which will generate a file with extension {formatted_ext}. "
+                f"The extension on the provided file type, {formatted_ext}, "
+                "and the output file will be used with the correct extension, "
+                f"{formatted_ot_ext}.\n"
                 "Note: If providing the output types explicitly, it is "
                 "okay to omit the extension from the filename."
             )

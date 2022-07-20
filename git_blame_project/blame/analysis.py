@@ -3,10 +3,10 @@ import csv
 import pathlib
 import os
 
+from git_blame_project import stdout
 from git_blame_project.formatters import path_formatter
 from git_blame_project.models import Slug, OutputTypes, OutputType
-from git_blame_project.stdout import info, not_supported
-from git_blame_project.utils import Callback
+from git_blame_project.utils import LazyFn
 
 from .blame_line import BlameLine
 from .git_env import get_git_branch
@@ -70,7 +70,7 @@ class Analysis(Slug(
         Slug.Config(name='num_analyses', required=True),
         Slug.Config(name='output_file', required=False),
         Slug.Config(name='output_type', required=False),
-        Slug.Config(name='output_dir', default=Callback(
+        Slug.Config(name='output_dir', default=LazyFn(
             func=pathlib.Path,
             args=[os.getcwd]
         ))
@@ -142,7 +142,7 @@ class Analysis(Slug(
 
     def output_csv(self):
         output_file = self.output_file('csv')
-        info(f"Writing to {str(output_file)}")
+        stdout.info(f"Writing to {str(output_file)}")
 
         if not hasattr(self, 'get_tabular_data'):
             raise TypeError(
@@ -157,7 +157,7 @@ class Analysis(Slug(
                 writer.writerows(data.rows)
 
     def output_excel(self):
-        not_supported("The `excel` output type is not yet supported.")
+        stdout.not_supported("The `excel` output type is not yet supported.")
 
 
 @analysis(slug='line_blame')
@@ -207,8 +207,10 @@ class ContributionsByLineAnalysis(Analysis):
 @analyses
 class Analyses(Slug(
     singular_model=Analysis,
-    line_blame=LineBlameAnalysis(),
-    contributions_by_line=ContributionsByLineAnalysis(),
+    choices={
+        'line_blame': LineBlameAnalysis(),
+        'contributions_by_line': ContributionsByLineAnalysis(),
+    },
     configuration=[
         Slug.Config(
             name='line_blame_columns',
@@ -216,7 +218,7 @@ class Analyses(Slug(
             default=[p.name for p in BlameLine.attributes]
         ),
         Slug.Config(name='output_file', required=False),
-        Slug.Config(name='output_dir', default=Callback(
+        Slug.Config(name='output_dir', default=LazyFn(
             func=pathlib.Path,
             args=[os.getcwd]
         ))

@@ -1,6 +1,6 @@
 import subprocess
 
-from git_blame_project.stdout import warning
+from git_blame_project import stdout
 
 from .blame_line import BlameLine
 from .exceptions import BlameFileParserError, BlameLineParserError
@@ -47,7 +47,7 @@ class BlameFile(LocationContextExtensible):
                 blamed = BlameLine(raw_line, context=context)
                 if isinstance(blamed, BlameLineParserError):
                     if not blamed.silent:
-                        warning(blamed.message)
+                        stdout.warning(blamed.message)
                 else:
                     blame_lines.append(blamed)
             return cls(blame_lines, context=context)

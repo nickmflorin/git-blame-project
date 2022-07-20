@@ -3,7 +3,7 @@ import os
 import pathlib
 import subprocess
 
-from git_blame_project.stdout import warning
+from git_blame_project import stdout
 from git_blame_project.utils import humanize_list
 
 
@@ -23,7 +23,7 @@ def get_git_branch(repository):
         try:
             result = result.decode("utf-8")
         except UnicodeDecodeError:
-            warning(
+            stdout.warning(
                 "There was an error determining the current git branch for "
                 "purposes of auto-generating a filename.  A placeholder value "
                 "will be used."
@@ -33,7 +33,7 @@ def get_git_branch(repository):
         for line in lines:
             if line.startswith("*"):
                 return line.split("*")[1].strip()
-        warning(
+        stdout.warning(
             "There was an error determining the current git branch for "
             "purposes of auto-generating a filename.  A placeholder value "
             "will be used."

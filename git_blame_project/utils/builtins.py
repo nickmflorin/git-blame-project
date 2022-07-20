@@ -9,7 +9,7 @@ class empty:
     """
 
 
-class Callback:
+class LazyFn:
     def __init__(self, func, *args, **kwargs):
         self._func = func
         if len(args) == 0 and 'args' in kwargs:
@@ -29,6 +29,12 @@ class Callback:
             else:
                 arguments.append(argument)
         return self._func(*arguments, **self._kwargs)
+
+
+def klass(instance_or_cls):
+    if not isinstance(instance_or_cls, type):
+        return instance_or_cls.__class__
+    return instance_or_cls
 
 
 def is_function(func):

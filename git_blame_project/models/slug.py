@@ -1,9 +1,8 @@
-import functools
-
+from git_blame_project.exceptions import ImproperInitializationError
 from git_blame_project.utils import (
-    iterable_from_args, import_at_module_path, empty, humanize_list)
+    iterable_from_args, import_at_module_path, empty, humanize_list, klass)
 
-from .configurable import Configurable, ConfigValue
+from .configurable import Configurable, Config, ConfigurableMetaClass
 
 
 def to_model(value):
@@ -16,35 +15,6 @@ def to_model_ref(value):
     if value is not None and type(value) is str:
         return value.split('.')[-1]
     return value
-
-
-def klass(instance_or_cls):
-    if not isinstance(instance_or_cls, type):
-        return instance_or_cls.__class__
-    return instance_or_cls
-
-
-def pluck_slug(instance_or_cls, *args, **kwargs):
-    reference = klass(instance_or_cls)
-
-    if not hasattr(instance_or_cls, 'slug'):
-        if len(args) == 0 and 'slug' not in kwargs:
-            raise TypeError(
-                f"The model {reference} does not define the "
-                "slug statically so it must be provided on "
-                "initialization."
-            )
-        elif len(args) == 1:
-            if not isinstance(args[0], str):
-                raise TypeError("The slug must be provided as a string.")
-            return args[0]
-        elif 'slug' in kwargs:
-            if not isinstance(kwargs['slug'], str):
-                raise TypeError("The slug must be provided as a string.")
-            return kwargs['slug']
-        else:
-            raise TypeError(f"Inproper initialization of {reference}.")
-    return instance_or_cls.slug
 
 
 static_map = {
@@ -69,75 +39,238 @@ def is_static(instance_or_cls, static=empty, dynamic=empty):
     return static_map[(static, dynamic)]
 
 
-class SlugBehaviorError(TypeError):
-    def __init__(self, instance_or_cls):
-        self._cls = klass(instance_or_cls)
-
-    @property
-    def message(self):
-        raise NotImplementedError()
-
-    def __str__(self):
-        return self.message
-
-
-class StaticSlugError(SlugBehaviorError):
-    @property
-    def message(self):
-        return (
-            f"The {self._cls.__name__} model is static and is not "
-            "configured."
-        )
-
-
-class DynamicSlugError(SlugBehaviorError):
-    @property
-    def message(self):
-        return (
-            f"The {self._cls.__name__} model is dynamic and is already "
-            "configured."
-        )
-
-
-def ensure_behavior(behavior, is_property=False):
-    assert behavior in ('static', 'dynamic'), \
-        "The behavior must either be static or dynamic."
-
-    def decorator(func):
-        @functools.wraps(func)
-        def inner(instance, *args, **kwargs):
-            if behavior == 'static' and not instance.static:
-                raise DynamicSlugError(instance)
-            elif behavior == 'dynamic' and not instance.dynamic:
-                raise StaticSlugError(instance)
-            return func(instance, *args, **kwargs)
-
-        if is_property:
-            return property(inner)
-        return inner
-    return decorator
+class SingleSlugMetaClass(ConfigurableMetaClass):
+    def __new__(cls, name, bases, dct):
+        if len(bases) not in (0, 1):
+            raise TypeError("Slugs do not support multiple inheritance.")
+        if len(bases) == 1 and bases[0].__name__ != "SlugCommon":
+            # We do not allow the `slug` attribute to be defined with an
+            # @property for classes that extend the SingleSlug base class.
+            if 'slug' in dct and isinstance(dct['slug'], property):
+                raise TypeError(
+                    "Singular forms of slug models cannot define a `slug` with "
+                    "an @property."
+                )
+        return super().__new__(cls, name, bases, dct)
 
 
 def Slug(**options):
+    """
+    A class factory that generates the base class for a slug-based model in
+    either its plural form or singular form.  Usage of slug-based models allows
+    us to define discrete options for a given entity while allowing those
+    options to be easily obtained and associated with each other.
+
+    Terminology:
+    -----------
+    For the following, we define the following terminology:
+
+    (1) Singular Context
+        The class factory is being used to generate the base class of a model
+        representing a single slug choice.
+
+    (2) Plural Context
+        The class factory is being used to generate the base class of a model
+        representing a discrete set of slug choices.
+
+    (3) Singular Form
+        A slug model that represents a single slug choice.
+
+        Consider we have a model class, `Fruit` that extends the singular form
+        of a slug model.  That is:
+
+        >>> class Fruit(Slug(plural_model=...))
+        >>>   ...
+
+        Lets assume that there are only 3 instances of the `Fruit` class that can
+        exist:
+
+        >>> Fruit(slug='apple')
+        >>> Fruit(slug='banana')
+        >>> Fruit(slug='pear')
+
+        As long as the slug instantiation does not include configurations,
+        instantiating a singular form of a slug model with a slug that already
+        exists will return the same slug instance:
+
+        >>> fruit1 = Fruit(slug='apple', title='Apple')
+        >>> fruit2 = Fruit(slug='apple')
+        >>> fruit2.title == "Apple"
+        >>> fruit1 == fruit2
+        >>> True
+
+    (4) Plural Form
+        A slug model that represents a discrete set of slug choices (in their
+        singular form).  The plural slug model can be instantiated with any
+        number of individual slug models, but each model must always correspond
+        to a pre-defined discrete instance.
+
+        >>> class Fruits(SlugModel(
+        >>>     singular_model=Fruit,
+        >>>     choices={
+        >>>         'apple': Fruit(slug='apple'),
+        >>>         'banana': Fruit(slug='banana'),
+        >>>         'pear': Fruit(slug='pear'),
+        >>>     }
+        >>> ))
+
+        Now, when referring to a single slug choice we can access the model via
+        the plural form as follows:
+
+        >>> Fruits.APPLE
+        >>> <Fruit apple>
+
+        Any set of `Fruit` models can be in a given `Fruits` set, as long as the
+        slugs are discrete choices for the plural model:
+
+        >>> smoothie_fruits = Fruits('apple', 'banana')
+        >>> all_fruits = Fruits('apple', 'banana', 'pear')
+
+    (5) Static Form
+        If a slug model model cannot be configured, or it has not yet been
+        configured, it is considered to be in the "static" form.  All aspects of
+        two slug instances will always be the same as long as those slug
+        instances are static and have the same "slug":
+
+    (6) Dynamic Form
+        Certain slug models (both plural and singular) can be configured with
+        certain dynamic attributes.  Unlike other attributes of a slug model,
+        configured attributes can differ between two slug instances with the
+        same "slug".
+
+        When a static slug model is configured, a new instance of that slug
+        model is returned with those configurations applied.  The returned,
+        configured instance is now considered "dynamic":
+
+        >>> fruit1 = Fruit(slug='apple', title='Apple')
+        >>> fruit2 = Fruit(slug='apple')
+        >>> fruit1 == fruit2
+        >>> True
+        >>> configured = fruit2.configure(config={"count": 5})
+        >>> fruit1 == configured
+        >>> False
+        >>> configured.dynamic
+        >>> True
+
+    Parameters:
+    ----------
+    singular_model: :obj:`type` or :obj:`str` (optional)
+        The class that represents the singular form of the slug model.  Can be
+        provided as the class itself or the string module path to the class
+        (to avoid circular imports).
+
+        Required for the plural context, not applicable for the singular context.
+        Default: None
+
+    plural_model: :obj:`type` or :obj:`str` (optional)
+        The class that represents the plural form of the slug model.  Can be
+        provided as the class itself or the string module path to the class
+        (to avoid circular imports).
+
+        Required for the singular context, not applicable for the plural context.
+        Default: None
+
+    choices: :obj:`dict` (optional)
+        The discrete set of slug models in their singular form that the plural
+        form of the slug model can consist of.
+
+        The keys of the provided :obj:`dict` refer to the static attribute name
+        of the individual slug instance on the plural slug class and the
+        values associated with each key, which represent the singular form of
+        the slug model the key is associated with, can be provided as either a
+        dictionary mapping of attributes-values that are used to instantiate the
+        class defined by the `singular_model` or an instance of the the class
+        defined by the `singular_model` itself.
+
+        Example:
+        -------
+        >>> choices = {"apple": {"slug": "apple", "color": "red"}}
+        >>> choices = {"apple": Fruit(slug="apple", color="red")}
+
+        Required for the plural context, not applicable for the singular context.
+        Default: None
+
+    configuration: :obj:`Configuration` or :obj:`list` (optional)
+        Either a :obj:`Configuration` instance or a :obj:`list` of :obj:`Config`
+        instances that define the attributes that the given slug model,
+        either in a plural or singular form, can be configured with.
+
+        When the `configuration` is present on a singular or plural form of
+        a slug class, that slug class can:
+
+        (1) Be instantiated with a `config` parameter that represents a set
+            of configuration values to configure the slug instance with.  In
+            this case, the instantiated form of the slug class will be dynamic.
+
+        (2) Be converted to a dynamic form of the slug class with the provided
+            set of configuration values applied via the `to_dynamic` method.
+            In this case, the method will return a dynamic form of the slug
+            instance with the configurations applied.
+
+        Default: None
+
+    cumulative_attributes: :obj:`dict` or :obj:`lambda` (optional)
+        Either an :obj:`dict` mapping of static attributes or a callback
+        taking the array of discrete slug choices as its argument and returning
+        an :obj:`dict` mapping of static attributes.  The static attributes
+        will be defined on the plural form of the model class.
+
+        This is used when we need to define attributes on the plural form of
+        the slug class that depend on the set of discrete slug choices for
+        that class.
+
+        Example:
+        -------
+        >>> cumulative_attributes = lambda __ALL__: {
+        >>>    "valid_slugs": [a.slug for a in __ALL__]
+        >>> }
+
+        In this case, the plural form of the slug model will have a `VALID_SLUGS`
+        attribute that returns the slugs of all the discrete slug choices for
+        that class.
+
+        Only applicable for the plural context.
+        Default: None
+    """
+    # Required if the factory is being used in the singular context.
     plural_model = options.pop('plural_model', None)
+
+    # Required if the factory is being used in the plural context.
     singular_model = options.pop('singular_model', None)
+
+    # Either the plural model or singular model must be defined, otherwise we
+    # cannot determine whether or not the base class is being used in the
+    # plural or singular context.
     if plural_model is None and singular_model is None:
         raise TypeError(
             "A slug model must either define its plural counterpart or its "
             "singular counterpart."
         )
-    if singular_model is not None and len(options) == 0:
+
+    # Choices are only applicable in the plural context, and including them
+    # for the singular context will raise an error.
+    choices = None
+    if singular_model is not None:
+        choices = options.pop('choices', None)
+        if choices is None or len(choices) == 0:
+            raise TypeError(
+                "The plural form of a slug model must define the individual "
+                "discrete slug choices that it can be composed of."
+            )
+    elif 'choices' in options:
         raise TypeError(
-            "A plural slug model must define `option_attributes`."
+            "The singular form of a slug model cannot define the set of "
+            "discrete choices for that slug model."
         )
 
+    # The configuration options can be provided in both plural and singular
+    # contexts.
     static_configuration = options.pop('configuration', [])
 
     class SlugCommon(Configurable):
         def __init__(self, config=None, static=empty, dynamic=empty):
             self._static = is_static(self, static=static, dynamic=dynamic)
-            if not self._static:
-                self.configure(config=config)
+            super().__init__(config=config)
 
         @property
         def static(self):
@@ -153,23 +286,15 @@ def Slug(**options):
                 return "static"
             return "dynamic"
 
-        @ensure_behavior('dynamic', is_property=True)
-        def config(self):
-            return super().config
-
-        @ensure_behavior('dynamic')
-        def configure(self, config=None):
-            """
-            Configures the instance based on the provided config values and
-            attaches the configuration to the instance.
-
-            This method can only be called in the case that the instance is
-            dynamic.  This means that if you have a static instance, you cannot
-            call this method externally - but rather have to call the
-            `to_dynamic` method and provide the configuration values such that
-            a new dynamic instance can be created and configured.
-            """
-            super().configure(config=config)
+        @property
+        def can_configure(self):
+            # Configuration can only be performed if the instance is dynamic.
+            # This means that if you have a static instance, you cannot
+            # configure it externally - but must use the `to_dynamic` method
+            # to instantiate a new dynamic instance which is then configured.
+            if self.static:
+                return f"The {self.__class__.__name__} instance is static."
+            return True
 
     # Note: We cannot use the ImmutableSequence class here since that is an
     # ABC Meta class whose metaclass conflicts with the SlugMetaClass.
@@ -198,6 +323,10 @@ def Slug(**options):
         def __len__(self):
             return len(self._store)
 
+        @property
+        def slugs(self):
+            return [ot.slug for ot in self]
+
         def __str__(self):
             humanized = humanize_list(self.slugs, conjunction="and")
             return (
@@ -214,6 +343,8 @@ def Slug(**options):
 
         @property
         def static(self):
+            # If the plural form of the slug model is static, all of its
+            # children must
             assert all([s.static == self._static for s in self]), \
                 f"The plural slug model {self.__class__} is " \
                 f"{self.static_string} but has children that are not " \
@@ -224,34 +355,38 @@ def Slug(**options):
         def all(cls):
             return cls(cls.__ALL__, static=True)
 
-        @ensure_behavior('static')
         def to_dynamic(self, config=None):
+            """
+            Returns a new dynamic instance of the :obj:`MultipleSlugs` with the
+            provided configurations applied.  All individual instances of
+            :obj:`SingleSlug` that the instance contains are also converted
+            to dynamic instances with the configurations applied.
+            """
+            if self.dynamic is True:
+                raise TypeError(
+                    f"The slug class {self.__class__} is already dynamic.")
             # The individual children slugs should be static because that check
-            # is performed in the static @property.
+            # is performed in the static @property.x
             return self.__class__(
                 *[slug.to_dynamic(config=config) for slug in self],
                 config=config,
                 static=False
             )
 
-        @property
-        def slugs(self):
-            return [ot.slug for ot in self]
-
-    class SingleSlug(SlugCommon):
+    class SingleSlug(SlugCommon, metaclass=SingleSlugMetaClass):
         plurality = 'single'
         configuration = static_configuration
 
         def __init__(self, *args, **kwargs):
             super().__init__(**kwargs)
-            self._slug = pluck_slug(self, *args, **kwargs)
+            self._slug = self.pluck_slug(*args, **kwargs)
 
         def __new__(cls, *args, **kwargs):
             _static = kwargs.get('static', empty)
             _dynamic = kwargs.get('dynamic', empty)
             static = is_static(cls, static=_static, dynamic=_dynamic)
 
-            slug = pluck_slug(cls, *args, **kwargs)
+            slug = cls.pluck_slug(*args, **kwargs)
 
             if static and not hasattr(cls, 'instances'):
                 setattr(cls, 'instances', [])
@@ -265,12 +400,61 @@ def Slug(**options):
             return instance
 
         def __str__(self):
-            return f"<{self.__class__.__name__} {self.slug}>"
+            # The slug may not be defined if the instance has not been fully
+            # initialized yet.
+            if hasattr(self, '_slug'):
+                return f"<{self.__class__.__name__} {self.slug}>"
+            return f"<{self.__class__.__name__} ...>"
 
         def __repr__(self):
-            return f"<{self.__class__.__name__} {self.slug}>"
+            # The slug may not be defined if the instance has not been fully
+            # initialized yet.
+            if hasattr(self, '_slug'):
+                return f"<{self.__class__.__name__} {self.slug}>"
+            return f"<{self.__class__.__name__} ...>"
+
+        @classmethod
+        def pluck_slug(cls, *args, **kwargs):
+            reference = klass(cls)
+            static_slug = getattr(cls, 'slug', None)
+            # We have to avoid cases where the `slug` on the class is an
+            # @property inherited from this base class.  The metaclass prevents
+            # extensions of this class from defining `slug` as an @property.
+            if static_slug is None or isinstance(static_slug, property):
+                # If the model does not define the slug statically, it must be
+                # provided as an argument or keyword argument.
+                if len(args) == 0 and 'slug' not in kwargs:
+                    raise ImproperInitializationError(
+                        cls=cls,
+                        message=(
+                            f"The model {reference} does not define the "
+                            "slug statically so it must be provided on "
+                            "initialization."
+                        )
+                    )
+                elif len(args) == 1:
+                    if not isinstance(args[0], str):
+                        raise ImproperInitializationError(
+                            cls=cls,
+                            message="The slug must be provided as a string."
+                        )
+                    return args[0]
+                elif 'slug' in kwargs:
+                    if not isinstance(kwargs['slug'], str):
+                        raise ImproperInitializationError(
+                            cls=cls,
+                            message="The slug must be provided as a string."
+                        )
+                    return kwargs['slug']
+                else:
+                    raise ImproperInitializationError(cls=cls)
+            return cls.slug
 
         def to_dynamic(self, config=None):
+            """
+            Returns a new dynamic instance of the :obj:`SingleSlug` with the
+            provided configurations applied.
+            """
             if hasattr(klass(self), 'slug'):
                 return self.__class__(config=config, static=False)
             return self.__class__(slug=self._slug, config=config, static=False)
@@ -309,11 +493,9 @@ def Slug(**options):
         # extensions of the base singular model class.
         return isinstance(model, singular_model)
 
-    cumulative_options = options.pop('cumulative', None)
-
     if singular_model is not None:
         __ALL__ = []
-        for k, v in options.items():
+        for k, v in choices.items():
             if isinstance(v, dict):
                 singular_model_cls = to_model(singular_model)
                 v = singular_model_cls(**v)
@@ -324,20 +506,33 @@ def Slug(**options):
                     "of parameters to initialize an instance of "
                     f"{singular_model_ref}."
                 )
+            if not v.static:
+                raise ValueError(
+                    "The provided slug choices for the plural form of the slug "
+                    "class must always be static."
+                )
             setattr(MultipleSlugs, k.upper(), v)
             __ALL__.append(v)
 
         setattr(MultipleSlugs, '__ALL__', __ALL__)
-        setattr(MultipleSlugs, 'HUMANIZED', humanize_list(
-            [m.slug for m in __ALL__], conjunction="or"))
 
-        if cumulative_options is not None:
-            cumulative_options = cumulative_options(__ALL__)
-            for k, v in cumulative_options.items():
-                setattr(MultipleSlugs, k.upper(), v)
+        cumulative_attributes = options.pop('cumulative_attributes', {})
+        if not isinstance(cumulative_attributes, dict):
+            cumulative_attributes = cumulative_attributes(__ALL__)
+        cumulative_attributes.update(
+            humanized=humanize_list([m.slug for m in __ALL__], conjunction="or")
+        )
+        for k, v in cumulative_attributes.items():
+            setattr(MultipleSlugs, k.upper(), v)
 
         return MultipleSlugs
+
+    if 'cumulative_attributes' in options:
+        raise TypeError(
+            "The cumulative attributes are only applicable for the plural form "
+            "of the slug model."
+        )
     return SingleSlug
 
 
-Slug.Config = ConfigValue
+Slug.Config = Config
