@@ -1,8 +1,8 @@
-from git_blame_project.exceptions import ImproperInitializationError
 from git_blame_project.utils import (
     iterable_from_args, import_at_module_path, empty, humanize_list, klass)
 
 from .configurable import Configurable, Config, ConfigurableMetaClass
+from .parsers import parse_param
 
 
 def to_model(value):
@@ -415,7 +415,6 @@ def Slug(**options):
 
         @classmethod
         def pluck_slug(cls, *args, **kwargs):
-            reference = klass(cls)
             static_slug = getattr(cls, 'slug', None)
             # We have to avoid cases where the `slug` on the class is an
             # @property inherited from this base class.  The metaclass prevents
@@ -423,31 +422,7 @@ def Slug(**options):
             if static_slug is None or isinstance(static_slug, property):
                 # If the model does not define the slug statically, it must be
                 # provided as an argument or keyword argument.
-                if len(args) == 0 and 'slug' not in kwargs:
-                    raise ImproperInitializationError(
-                        cls=cls,
-                        message=(
-                            f"The model {reference} does not define the "
-                            "slug statically so it must be provided on "
-                            "initialization."
-                        )
-                    )
-                elif len(args) == 1:
-                    if not isinstance(args[0], str):
-                        raise ImproperInitializationError(
-                            cls=cls,
-                            message="The slug must be provided as a string."
-                        )
-                    return args[0]
-                elif 'slug' in kwargs:
-                    if not isinstance(kwargs['slug'], str):
-                        raise ImproperInitializationError(
-                            cls=cls,
-                            message="The slug must be provided as a string."
-                        )
-                    return kwargs['slug']
-                else:
-                    raise ImproperInitializationError(cls=cls)
+                return parse_param(cls, 'slug', *args, valid_types=str, **kwargs)
             return cls.slug
 
         def to_dynamic(self, config=None):
