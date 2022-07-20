@@ -281,7 +281,7 @@ def Slug(**options):
             return not self._static
 
         @property
-        def static_string(self):
+        def state_string(self):
             if self.static is True:
                 return "static"
             return "dynamic"
@@ -330,14 +330,14 @@ def Slug(**options):
         def __str__(self):
             humanized = humanize_list(self.slugs, conjunction="and")
             return (
-                f"<{self.__class__.__name__} {self.static_string} "
+                f"<{self.__class__.__name__} {self.state_string} "
                 f"slugs={humanized}>"
             )
 
         def __repr__(self):
             humanized = humanize_list(self.slugs, conjunction="and")
             return (
-                f"<{self.__class__.__name__} {self.static_string} "
+                f"<{self.__class__.__name__} {self.state_string} "
                 f"slugs={humanized}>"
             )
 
@@ -347,8 +347,8 @@ def Slug(**options):
             # children must
             assert all([s.static == self._static for s in self]), \
                 f"The plural slug model {self.__class__} is " \
-                f"{self.static_string} but has children that are not " \
-                f"{self.static_string}."
+                f"{self.state_string} but has children that are not " \
+                f"{self.state_string}."
             return self._static
 
         @classmethod

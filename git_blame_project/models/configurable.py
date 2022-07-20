@@ -29,13 +29,13 @@ class ConfigError(GitBlameProjectError):
         return f"There was an error configuring {self.cls.__name__}"
 
     @property
-    def message_content(self):
+    def content(self):
         return f"The configuration `{self.name}` is invalid."
 
 
 class ConfigRequiredError(ConfigError):
     @property
-    def message_content(self):
+    def content(self):
         return (
             f"The configuration `{self.name}` is required but was not "
             "provided."

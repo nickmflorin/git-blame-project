@@ -3,35 +3,16 @@ from .git_env import LocationContextExtensible
 
 
 class ParserError(GitBlameProjectError, LocationContextExtensible):
-    def __init__(self, detail=None, silent=False, **kwargs):
-        super().__init__("")
-        LocationContextExtensible.__init__(self, **kwargs)
-        self._detail = detail
-        self._silent = silent
+    message_prefix = "There was a parsing error"
 
-    def __str__(self):
-        return self.message
+    def __init__(self, detail=None, silent=False, **kwargs):
+        super().__init__(detail=detail)
+        LocationContextExtensible.__init__(self, **kwargs)
+        self._silent = silent
 
     @property
     def silent(self):
         return self._silent
-
-    @property
-    def base_message(self):
-        raise NotImplementedError()
-
-    @property
-    def detail(self):
-        if self._detail is not None:
-            return str(self._detail)
-        return None
-
-    @property
-    def message(self):
-        base = self.base_message
-        if self.detail is not None:
-            return base + f"\nDetail: {self.detail}"
-        return base
 
 
 class BlameLineParserError(ParserError):
@@ -44,7 +25,7 @@ class BlameLineParserError(ParserError):
         return self._data
 
     @property
-    def base_message(self):
+    def content(self):
         return f"The line {self.data} in file {self.repository_name} " \
             "could not be parsed."
 
@@ -74,7 +55,7 @@ class BlameLineAttributeParserError(BlameLineParserError):
         return None
 
     @property
-    def base_message(self):
+    def content(self):
         return f"The attribute {self.attr} could not be parsed from line " \
             f"{self.data} in file {self.repository_name}."
 
@@ -88,5 +69,5 @@ class BlameLineAttributeParserError(BlameLineParserError):
 
 class BlameFileParserError(ParserError):
     @property
-    def base_message(self):
+    def content(self):
         return f"The file {self.repository_name} could not be parsed."

@@ -21,29 +21,34 @@ def validate_string(instance, value, param):
 
 def pluck_obj(instance, **kwargs):
     value = None
-    if 'instance' in kwargs:
+    if 'instance' in kwargs and kwargs['instance'] is not None:
         return validate_obj(instance, kwargs['instance'])
-    elif 'cls' in kwargs:
+    elif 'cls' in kwargs and kwargs['cls'] is not None:
         return validate_obj(instance, kwargs['cls'])
     return value
 
 
 def pluck_string(instance, param, **kwargs):
     value = None
-    if param in kwargs:
+    if param in kwargs and kwargs[param] is not None:
         return validate_string(instance, kwargs[param], param)
     return value
 
 
-def pluck_message(instance, **kwargs):
-    return pluck_string(instance, 'message', **kwargs)
+class ExceptionMetaClass(type):
+    def __new__(cls, name, bases, dct):
+        if name != 'AbstractException':
+            # We do not allow the `message` attribute to be statically defined
+            # on classes that extend the AbstractException base class.
+            if 'message' in dct:
+                raise TypeError(
+                    f"The exception class {name} extends `AbstractException` "
+                    "and cannot define the `message` attribute statically."
+                )
+        return super().__new__(cls, name, bases, dct)
 
 
-def pluck_message_content(instance, **kwargs):
-    return pluck_string(instance, 'message', **kwargs)
-
-
-class AbstractException(Exception):
+class AbstractException(Exception, metaclass=ExceptionMetaClass):
     def __init__(self, *args, **kwargs):
         if len(args) not in (0, 1, 2):
             raise ImproperInitializationError(self, message=(
@@ -52,7 +57,6 @@ class AbstractException(Exception):
             ))
         self._obj = None
         self._message = None
-        self._message_content = kwargs.pop('message_content', None)
         if len(args) == 2:
             if isinstance(args[0], str):
                 self._message = args[0]
@@ -71,10 +75,14 @@ class AbstractException(Exception):
                 self._obj = pluck_obj(self, **kwargs)
             else:
                 self._obj = validate_obj(self, args[0])
-                self._message = pluck_message(self, **kwargs)
+                self._message = pluck_string(self, 'message', **kwargs)
         else:
             self._obj = pluck_obj(self, **kwargs)
-            self._message = pluck_message(self, **kwargs)
+            self._message = pluck_string(self, 'message', **kwargs)
+
+        self._detail = pluck_string(self, 'detail', **kwargs)
+        self._detail_prefix = pluck_string(self, 'detail_prefix', **kwargs)
+        self._message_prefix = pluck_string(self, 'message_prefix', **kwargs)
 
         if getattr(self, 'object_required', False) and self._obj is None:
             raise TypeError(
@@ -95,40 +103,68 @@ class AbstractException(Exception):
         return None
 
     @classmethod
-    def standardize_prefix(cls, prefix, has_message=True):
+    def standardize_prefix(cls, prefix, content=None):
         end_characters = {
             True: ":",
             False: "."
         }
         prefix = prefix.strip()
-        end_char = end_characters[has_message]
+        end_char = end_characters[content is not None]
         if not prefix.endswith(end_char):
             prefix = f"{prefix}{end_char}"
         return prefix
 
     @property
-    def message_content(self):
-        return self._message_content
+    def detail(self):
+        return self._detail
+
+    @property
+    def detail_prefix(self):
+        return self._detail_prefix or "Detail"
+
+    @property
+    def message_prefix(self):
+        return self._message_prefix
+
+    @property
+    def content(self):
+        return self._message
+
+    def standardize_content_and_prefix(self, prefix=None, content=None,
+            use_prefix_alone=True):
+        mapping = {
+            (True, True):
+                f"{self.standardize_prefix(prefix, content=content)} {content}",
+            (True, False):
+                f"{self.standardize_prefix(prefix, content=content)}"
+                if use_prefix_alone else None,
+            (False, True): content,
+            (False, False): None
+        }
+        return mapping[(prefix is not None, content is not None)]
 
     @property
     def message(self):
-        message = self._message or self.message_content
-        prefix = None
-        if getattr(self, 'message_prefix', None) is not None:
-            prefix = self.standardize_prefix(
-                prefix=self.message_prefix,
-                has_message=message is not None
+        base_message = self.standardize_content_and_prefix(
+            prefix=self.message_prefix,
+            content=self.content
+        )
+        if base_message is None:
+            raise ImproperInitializationError(
+                cls=self.__class__,
+                message=(
+                    f"The exception class {self.__class__} does not define a "
+                    "message or a prefix."
+                )
             )
-        if message is None and prefix is None:
-            raise TypeError(
-                f"The exception class {self.__class__} was not initialized "
-                "with a message nor does it define one statically."
-            )
-        if prefix is not None and message is not None:
-            return f"{prefix} {message}"
-        elif prefix is not None:
-            return prefix
-        return message
+        detail_message = self.standardize_content_and_prefix(
+            prefix=self.detail_prefix,
+            content=self.detail,
+            use_prefix_alone=False
+        )
+        if detail_message is not None:
+            return f"{base_message}\n{detail_message}"
+        return base_message
 
     def __str__(self):
         return self.message
