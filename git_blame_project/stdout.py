@@ -1,7 +1,7 @@
 import copy
 import click
 
-from git_blame_project.utils import ensure_iterable, humanize_list, empty
+from git_blame_project import utils
 
 
 class Terminal:
@@ -38,9 +38,9 @@ class Terminal:
         return " ".join(filtered)
 
     @classmethod
-    def get_styles(cls, style=None, bold=empty):
+    def get_styles(cls, style=None, bold=utils.empty):
         style = style or []
-        styles = ensure_iterable(style)
+        styles = utils.ensure_iterable(style)
 
         if bold is True and cls.BOLD_STYLE not in styles:
             styles += [cls.BOLD_STYLE]
@@ -55,7 +55,7 @@ class Terminal:
             if len(invalid_styles) == 1:
                 raise ValueError(
                     f"The provided style {styles[0]} is invalid.")
-            humanized = humanize_list(invalid_styles)
+            humanized = utils.humanize_list(invalid_styles)
             raise ValueError(f"The provided styles {humanized} are invalid.")
         return styles
 
@@ -66,7 +66,7 @@ class Terminal:
         return cls.STYLE_METHOD_MAP[style](text, reset=reset)
 
     @classmethod
-    def apply_styles(cls, text, style=None, bold=empty, reset=False):
+    def apply_styles(cls, text, style=None, bold=utils.empty, reset=False):
         styles = cls.get_styles(style=style, bold=bold)
         for s in styles:
             text = cls.apply_style(text, s, reset=False)
@@ -124,7 +124,7 @@ class Terminal:
 
     @classmethod
     def message(cls, text, prefix=None, color=None, level=None, indent=None,
-            style=None, bold=empty):
+            style=None, bold=utils.empty):
         return cls.conditionally_join([
             cls.get_indent_prefix(indent=indent),
             cls.get_prefix(prefix=prefix, color=color, level=level),

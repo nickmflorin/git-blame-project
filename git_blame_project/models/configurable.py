@@ -1,15 +1,10 @@
 import functools
 import inspect
 
-from git_blame_project import stdout
-from git_blame_project.exceptions import (
-    GitBlameProjectError, ImproperUsageError)
-from git_blame_project.utils import (
-    iterable_from_args, empty, humanize_list, ImmutableSequence, humanize_dict,
-    LazyFn, is_function)
+from git_blame_project import stdout, utils, exceptions
 
 
-class ConfigError(GitBlameProjectError):
+class ConfigError(exceptions.GitBlameProjectError):
     """
     Raised when there is an error related to a specific configuration value.
     The default behavior is to indicate that the configuration is simply
@@ -43,7 +38,7 @@ class ConfigRequiredError(ConfigError):
         )
 
 
-class ConfigurationError(GitBlameProjectError):
+class ConfigurationError(exceptions.GitBlameProjectError):
     """
     Raised when an instance cannot be configured.
     """
@@ -169,7 +164,7 @@ class Config:
     def __init__(self, name, **kwargs):
         self._name = name
         self._required = kwargs.pop('required', False)
-        self._default = kwargs.pop('default', empty)
+        self._default = kwargs.pop('default', utils.empty)
         self._formatter = kwargs.pop('formatter', None)
         self._allow_null = kwargs.pop('allow_null', False)
 
@@ -218,7 +213,7 @@ class Config:
             raise ConfigRequiredError(self.accessor, cls=instance)
         if isinstance(config_obj, Configuration):
             return getattr(config_obj, self.accessor)
-        return config_obj.get(self.accessor, empty)
+        return config_obj.get(self.accessor, utils.empty)
 
     def default_value(self, instance):
         """
@@ -236,15 +231,15 @@ class Config:
             (b) A callback function that takes a single argument; the instance
                 being configured.
         """
-        if isinstance(self.default, LazyFn):
+        if isinstance(self.default, utils.LazyFn):
             return self.default()
-        elif is_function(self.default):
+        elif utils.is_function(self.default):
             argspec = inspect.getfullargspec(self.default)
             if len(argspec.args) == 0:
                 return self.default()
             elif len(argspec.args) == 1:
                 return self.default(instance)
-            raise ImproperUsageError(
+            raise exceptions.ImproperUsageError(
                 cls=self,
                 func='default_value',
                 message=(
@@ -255,21 +250,21 @@ class Config:
         return self.default
 
     def is_missing(self, value):
-        return value is empty or (not self.allow_null and value is None)
+        return value is utils.empty or (not self.allow_null and value is None)
 
     def parse(self, instance, config_obj):
         # Keep track of whether or not the value was defaulted such that the
         # formatter is only applied to values that were not defaulted.
         default_used = False
 
-        value = empty
+        value = utils.empty
         if config_obj is not None:
             value = self.read(instance, config_obj)
 
         # If the value is missing, use the default value (which can still be
         # empty if the default is not defined).
         if self.is_missing(value):
-            if self.default is not empty:
+            if self.default is not utils.empty:
                 value = self.default_value(instance)
                 default_used = True
 
@@ -297,7 +292,7 @@ def merge_configurations(*args, existing=None):
     """
     def standardize(*a):
         flattened = []
-        for c in iterable_from_args(*a):
+        for c in utils.iterable_from_args(*a):
             config_value = c
             if not isinstance(config_value, Config):
                 config_value = Config(**c)
@@ -327,7 +322,7 @@ def merge_configurations(*args, existing=None):
     # a warning about duplicated configurations in the set being added.
     configurations, duplicated = add_and_track_duplicates(*args)
     if duplicated:
-        humanized = humanize_list(duplicated, conjunction="and")
+        humanized = utils.humanize_list(duplicated, conjunction="and")
         stdout.log(
             f"Encountered duplicate configurations for {humanized}. "
             "For each duplicated configuration, the configuration defined "
@@ -342,7 +337,7 @@ def merge_configurations(*args, existing=None):
             existing=existing
         )
         if duplicated:
-            humanized = humanize_list(duplicated, conjunction="and")
+            humanized = utils.humanize_list(duplicated, conjunction="and")
             stdout.log(
                 f"The configurations {humanized} already exist as "
                 "configuration values and will be overwritten."
@@ -350,7 +345,7 @@ def merge_configurations(*args, existing=None):
     return configurations
 
 
-class Configuration(ImmutableSequence):
+class Configuration(utils.ImmutableSequence):
     """
     A class that has the behaviors of an iterable type that represents a set of
     :obj:`Config` instances that are attached to a configurable instance.
@@ -362,11 +357,11 @@ class Configuration(ImmutableSequence):
         super().__init__(*standardized)
 
     def __str__(self):
-        humanized = humanize_dict(self._configuration)
+        humanized = utils.humanize_dict(self._configuration)
         return f"<{self.__class__.__name__} {humanized}>"
 
     def __repr__(self):
-        humanized = humanize_dict(self._configuration)
+        humanized = utils.humanize_dict(self._configuration)
         return f"<{self.__class__.__name__} {humanized}>"
 
     def __getattr__(self, k):

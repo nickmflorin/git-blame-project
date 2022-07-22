@@ -3,9 +3,7 @@ import pathlib
 
 import click
 
-from git_blame_project import stdout
-from git_blame_project.models import Configurable, Config
-from git_blame_project.utils import standardize_extensions
+from git_blame_project import stdout, utils, models
 
 from .analysis import Analyses, LineBlameAnalysis
 from .blame_file import BlameFile
@@ -14,21 +12,21 @@ from .exceptions import BlameFileParserError
 from .git_env import repository_directory_context, LocationContext
 
 
-class Blame(Configurable):
+class Blame(models.Configurable):
     configuration = [
-        Config(
+        models.Config(
             name='ignore_dirs',
             default=set(DEFAULT_IGNORE_DIRECTORIES),
             formatter=lambda v: set(v + DEFAULT_IGNORE_DIRECTORIES)
         ),
-        Config(
+        models.Config(
             name='ignore_file_types',
-            default=standardize_extensions(DEFAULT_IGNORE_FILE_TYPES),
-            formatter=lambda v: set(standardize_extensions(
+            default=utils.standardize_extensions(DEFAULT_IGNORE_FILE_TYPES),
+            formatter=lambda v: set(utils.standardize_extensions(
                 v + DEFAULT_IGNORE_FILE_TYPES))
         ),
-        Config(name='file_limit'),
-        Config(name='analyses', default=Analyses(LineBlameAnalysis()))
+        models.Config(name='file_limit'),
+        models.Config(name='analyses', default=Analyses(LineBlameAnalysis()))
     ]
 
     def __init__(self, repository, **kwargs):

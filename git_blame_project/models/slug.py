@@ -1,5 +1,4 @@
-from git_blame_project.utils import (
-    iterable_from_args, import_at_module_path, empty, humanize_list, klass)
+from git_blame_project import utils
 
 from .configurable import Configurable, Config, ConfigurableMetaClass
 from .parsers import parse_param
@@ -7,7 +6,7 @@ from .parsers import parse_param
 
 def to_model(value):
     if value is not None and type(value) is str:
-        return import_at_module_path(value)
+        return utils.import_at_module_path(value)
     return value
 
 
@@ -18,18 +17,18 @@ def to_model_ref(value):
 
 
 static_map = {
-    (empty, empty): True,
+    (utils.empty, utils.empty): True,
     (True, False): True,
     (False, True): False,
-    (True, empty): True,
-    (empty, True): False,
-    (False, empty): False,
-    (empty, False): True
+    (True, utils.empty): True,
+    (utils.empty, True): False,
+    (False, utils.empty): False,
+    (utils.empty, False): True
 }
 
 
-def is_static(instance_or_cls, static=empty, dynamic=empty):
-    reference = klass(instance_or_cls).__name__
+def is_static(instance_or_cls, static=utils.empty, dynamic=utils.empty):
+    reference = utils.klass(instance_or_cls).__name__
     if (static, dynamic) not in static_map:
         assert (static, dynamic) in [(True, True), (False, False)]
         message = f"{reference} cannot be both static and dynamic."
@@ -268,7 +267,7 @@ def Slug(**options):
     static_configuration = options.pop('configuration', [])
 
     class SlugCommon(Configurable):
-        def __init__(self, config=None, static=empty, dynamic=empty):
+        def __init__(self, config=None, static=utils.empty, dynamic=utils.empty):
             self._static = is_static(self, static=static, dynamic=dynamic)
             super().__init__(config=config)
 
@@ -309,7 +308,7 @@ def Slug(**options):
             # The instances the plural class is initialized with can either be
             # the :obj:`Slug` instances themselves or the string slugs that
             # are associated with specific :obj:`Slug` instances.
-            slugs = iterable_from_args(*slugs)
+            slugs = utils.iterable_from_args(*slugs)
             self._store = [singular_model_cls.for_slug(s) for s in set(slugs)]
             super().__init__(static=static, config=config)
 
@@ -328,14 +327,14 @@ def Slug(**options):
             return [ot.slug for ot in self]
 
         def __str__(self):
-            humanized = humanize_list(self.slugs, conjunction="and")
+            humanized = utils.humanize_list(self.slugs, conjunction="and")
             return (
                 f"<{self.__class__.__name__} {self.state_string} "
                 f"slugs={humanized}>"
             )
 
         def __repr__(self):
-            humanized = humanize_list(self.slugs, conjunction="and")
+            humanized = utils.humanize_list(self.slugs, conjunction="and")
             return (
                 f"<{self.__class__.__name__} {self.state_string} "
                 f"slugs={humanized}>"
@@ -382,8 +381,8 @@ def Slug(**options):
             self._slug = self.pluck_slug(*args, **kwargs)
 
         def __new__(cls, *args, **kwargs):
-            _static = kwargs.get('static', empty)
-            _dynamic = kwargs.get('dynamic', empty)
+            _static = kwargs.get('static', utils.empty)
+            _dynamic = kwargs.get('dynamic', utils.empty)
             static = is_static(cls, static=_static, dynamic=_dynamic)
 
             slug = cls.pluck_slug(*args, **kwargs)
@@ -430,7 +429,7 @@ def Slug(**options):
             Returns a new dynamic instance of the :obj:`SingleSlug` with the
             provided configurations applied.
             """
-            if hasattr(klass(self), 'slug'):
+            if hasattr(utils.klass(self), 'slug'):
                 return self.__class__(config=config, static=False)
             return self.__class__(slug=self._slug, config=config, static=False)
 
@@ -494,9 +493,10 @@ def Slug(**options):
         cumulative_attributes = options.pop('cumulative_attributes', {})
         if not isinstance(cumulative_attributes, dict):
             cumulative_attributes = cumulative_attributes(__ALL__)
-        cumulative_attributes.update(
-            humanized=humanize_list([m.slug for m in __ALL__], conjunction="or")
-        )
+        cumulative_attributes.update(humanized=utils.humanize_list(
+            [m.slug for m in __ALL__],
+            conjunction="or"
+        ))
         for k, v in cumulative_attributes.items():
             setattr(MultipleSlugs, k.upper(), v)
 

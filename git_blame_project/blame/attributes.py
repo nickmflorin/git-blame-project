@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
-from git_blame_project.exceptions import ImproperInitializationError
-from git_blame_project.utils import ensure_datetime, DateTimeValueError
+from git_blame_project import exceptions, utils
 
 from .exceptions import BlameLineAttributeParserError
 
@@ -126,7 +125,7 @@ class ExistingLineAttribute(DependentAttribute):
         # formatted attribute value - which will usually differ from the
         # original attribute value - will be set on the instance.
         if self._formatter is not None and self._attr is None:
-            raise ImproperInitializationError(
+            raise exceptions.ImproperInitializationError(
                 self,
                 message=(
                     "If the `formatter` parameter is provided, the `attr` must "
@@ -198,8 +197,8 @@ class DateTimeParsedAttribute(ParsedAttribute):
     def parse(self, data, groups, context):
         value = super().parse(data, groups, context)
         try:
-            return ensure_datetime(value)
-        except DateTimeValueError:
+            return utils.ensure_datetime(value)
+        except utils.DateTimeValueError:
             self.fail(data, context, value=value)
 
 

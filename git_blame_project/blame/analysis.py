@@ -3,10 +3,8 @@ import csv
 import pathlib
 import os
 
-from git_blame_project import stdout
-from git_blame_project.formatters import path_formatter
+from git_blame_project import stdout, utils
 from git_blame_project.models import Slug, OutputTypes, OutputType
-from git_blame_project.utils import LazyFn
 
 from .blame_line import BlameLine
 from .git_env import get_git_branch
@@ -65,12 +63,12 @@ class Analysis(Slug(
         Slug.Config(
             name='repository',
             required=True,
-            formatter=path_formatter()
+            formatter=utils.path_formatter()
         ),
         Slug.Config(name='num_analyses', required=True),
         Slug.Config(name='output_file', required=False),
         Slug.Config(name='output_type', required=False),
-        Slug.Config(name='output_dir', default=LazyFn(
+        Slug.Config(name='output_dir', default=utils.LazyFn(
             func=pathlib.Path,
             args=[os.getcwd]
         ))
@@ -218,7 +216,7 @@ class Analyses(Slug(
             default=[p.name for p in BlameLine.attributes]
         ),
         Slug.Config(name='output_file', required=False),
-        Slug.Config(name='output_dir', default=LazyFn(
+        Slug.Config(name='output_dir', default=utils.LazyFn(
             func=pathlib.Path,
             args=[os.getcwd]
         ))

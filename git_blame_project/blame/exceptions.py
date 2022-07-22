@@ -1,8 +1,8 @@
-from git_blame_project.exceptions import GitBlameProjectError
+from git_blame_project import exceptions
 from .git_env import LocationContextExtensible
 
 
-class ParserError(GitBlameProjectError, LocationContextExtensible):
+class ParserError(exceptions.GitBlameProjectError, LocationContextExtensible):
     def __init__(self, detail=None, silent=False, **kwargs):
         super().__init__(detail=detail, **kwargs)
         LocationContextExtensible.__init__(self, **kwargs)

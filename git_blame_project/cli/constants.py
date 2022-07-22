@@ -1,5 +1,5 @@
-from .blame import Analyses
-from .models import OutputTypes
+from git_blame_project.blame import Analyses
+from git_blame_project.models import OutputTypes
 
 
 class HelpText:

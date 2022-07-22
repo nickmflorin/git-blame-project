@@ -3,8 +3,7 @@ import os
 import pathlib
 import subprocess
 
-from git_blame_project import stdout
-from git_blame_project.utils import humanize_list
+from git_blame_project import stdout, utils
 
 
 @contextlib.contextmanager
@@ -61,7 +60,8 @@ class LocationContext:
                     raise TypeError(
                         f"The parameter `{missing_kwargs[0]}` is required.")
                 else:
-                    humanized = humanize_list([f"`{a}`" for a in missing_kwargs])
+                    humanized = utils.humanize_list(
+                        [f"`{a}`" for a in missing_kwargs])
                     raise ValueError(f"The parameters {humanized} are required.")
 
             self._repository = kwargs['repository']

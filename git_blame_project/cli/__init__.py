@@ -3,9 +3,10 @@ import sys
 import click
 
 import git_blame_project
+
+from git_blame_project.blame import Analyses, Blame, BlameLine
 from git_blame_project.blame.analysis import LineBlameAnalysis
 
-from .blame import Analyses, Blame, BlameLine
 from .constants import HelpText
 from .types import (
     RootParamType, CommaSeparatedListType, OutputFileType, OutputFileDirType,

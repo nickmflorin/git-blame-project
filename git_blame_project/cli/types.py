@@ -1,9 +1,9 @@
 import pathlib
 import click
 
-from .blame import Analyses
-from .models import OutputFile, OutputTypes
-from .stdout import stdout
+from git_blame_project import stdout
+from git_blame_project.blame import Analyses
+from git_blame_project.models import OutputFile, OutputTypes
 
 
 def inconsistent_output_location_warning(output_dir, outputfile):

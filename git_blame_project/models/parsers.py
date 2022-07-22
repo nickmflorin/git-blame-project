@@ -1,5 +1,4 @@
-from git_blame_project.exceptions import ImproperInitializationError
-from git_blame_project.utils import humanize_list
+from git_blame_project import exceptions, utils
 
 
 def parse_param(cls, param, *args, **kwargs):
@@ -17,7 +16,7 @@ def parse_param(cls, param, *args, **kwargs):
     elif param in kwargs:
         value = kwargs[param]
     elif required:
-        raise ImproperInitializationError(
+        raise exceptions.ImproperInitializationError(
             cls=cls,
             message=f"The parameter {param} is required."
         )
@@ -26,15 +25,15 @@ def parse_param(cls, param, *args, **kwargs):
 
     if valid_types and not isinstance(value, valid_types):
         if len(valid_types) == 1:
-            raise ImproperInitializationError(
+            raise exceptions.ImproperInitializationError(
                 cls=cls,
                 message=(
                     f"Expected type {valid_types[0]} for {param}, but "
                     f"received {type(value)}."
                 )
             )
-        humanized = humanize_list(valid_types, conjunction="or")
-        raise ImproperInitializationError(
+        humanized = utils.humanize_list(valid_types, conjunction="or")
+        raise exceptions.ImproperInitializationError(
             cls=cls,
             message=(
                 f"Expected type {humanized} for {param}, but received "
