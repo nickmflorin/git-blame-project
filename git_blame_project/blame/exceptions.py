@@ -4,7 +4,7 @@ from .git_env import LocationContextExtensible
 
 class ParserError(GitBlameProjectError, LocationContextExtensible):
     def __init__(self, detail=None, silent=False, **kwargs):
-        super().__init__(detail=detail)
+        super().__init__(detail=detail, **kwargs)
         LocationContextExtensible.__init__(self, **kwargs)
         self._silent = silent
 
@@ -17,12 +17,7 @@ class BlameLineParserError(ParserError):
     detail_prefix = "Line"
 
     def __init__(self, data, **kwargs):
-        super().__init__(**kwargs)
-        self._data = data
-
-    @property
-    def detail(self):
-        return self._data
+        super().__init__(detail=data, **kwargs)
 
     @property
     def content(self):

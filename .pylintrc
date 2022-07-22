@@ -98,7 +98,8 @@ disable=
   useless-option-value,
   use-a-generator,
   unspecified-encoding,
-  arguments-renamed
+  arguments-renamed,
+  super-with-arguments
 
 
 [REPORTS]

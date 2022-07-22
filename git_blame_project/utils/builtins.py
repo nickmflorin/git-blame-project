@@ -7,6 +7,11 @@ class empty:
     or output value.
     It is required because `None` may be a valid input or output value.
     """
+    @classmethod
+    def default(cls, value, default):
+        if value is empty:
+            return default
+        return value
 
 
 class LazyFn:
@@ -58,6 +63,20 @@ def is_iterable(value):
     return not isinstance(value, str) and hasattr(value, '__iter__')
 
 
+def cjoin(*args, delimiter=" ", invalids=empty, formatter=None):
+    string_args = []
+    invalids = ensure_iterable(empty.default(invalids, [None]))
+    for a in args:
+        if a not in invalids:
+            if formatter is not None:
+                string_args.append(formatter(str(a)))
+            else:
+                string_args.append(str(a))
+    if len(string_args) == 0:
+        return ""
+    return delimiter.join(string_args)
+
+
 def humanize_list(value, callback=str, conjunction='and', oxford_comma=True):
     """
     Turns an interable list into a human readable string.
@@ -99,6 +118,13 @@ def iterable_from_args(*args, cast=list, strict=True):
         return cast([args[0]])
     else:
         return cast(args[:])
+
+
+def pluck_first_kwarg(*args, **kwargs):
+    for a in args:
+        if a in kwargs:
+            return kwargs[a]
+    return None
 
 
 def ensure_iterable(value, strict=False, cast=list, cast_none=True):
