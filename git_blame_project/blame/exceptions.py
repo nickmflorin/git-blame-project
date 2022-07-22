@@ -3,8 +3,6 @@ from .git_env import LocationContextExtensible
 
 
 class ParserError(GitBlameProjectError, LocationContextExtensible):
-    message_prefix = "There was a parsing error"
-
     def __init__(self, detail=None, silent=False, **kwargs):
         super().__init__(detail=detail)
         LocationContextExtensible.__init__(self, **kwargs)
@@ -16,21 +14,27 @@ class ParserError(GitBlameProjectError, LocationContextExtensible):
 
 
 class BlameLineParserError(ParserError):
+    detail_prefix = "Line"
+
     def __init__(self, data, **kwargs):
         super().__init__(**kwargs)
         self._data = data
 
     @property
-    def data(self):
+    def detail(self):
         return self._data
 
     @property
     def content(self):
-        return f"The line {self.data} in file {self.repository_name} " \
-            "could not be parsed."
+        return f"The line in file {self.repository_name} could not be parsed."
 
 
 class BlameLineAttributeParserError(BlameLineParserError):
+    detail_prefix = [
+        BlameLineParserError.detail_prefix,
+        'Reason',
+    ]
+
     def __init__(self, data, attr, critical=True, value=None, **kwargs):
         super().__init__(data, **kwargs)
         self._attr = attr
@@ -47,24 +51,17 @@ class BlameLineAttributeParserError(BlameLineParserError):
 
     @property
     def detail(self):
-        root_detail = super().detail
-        if root_detail is not None:
-            return root_detail
-        elif self._value is not None:
-            return f"The value {self._value} is invalid."
-        return None
+        if self._value is not None:
+            return [
+                super().detail,
+                f"The value {self._value} is invalid."
+            ]
+        return super().detail
 
     @property
     def content(self):
-        return f"The attribute {self.attr} could not be parsed from line " \
-            f"{self.data} in file {self.repository_name}."
-
-    @property
-    def non_critical_message(self):
-        return (
-            f"Warning: Attribute {self.attr} is being excluded from line.\n"
-            f"{self.message}"
-        )
+        return f"The attribute `{self.attr}` could not be parsed from line " \
+            f"in file {self.repository_name}."
 
 
 class BlameFileParserError(ParserError):

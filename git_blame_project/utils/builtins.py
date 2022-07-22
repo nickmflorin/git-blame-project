@@ -37,8 +37,25 @@ def klass(instance_or_cls):
     return instance_or_cls
 
 
+def obj_name(obj):
+    if hasattr(obj, '__class__'):
+        return obj.__class__.__name__
+    elif hasattr(obj, '__name__'):
+        return obj.__name__
+    elif not isinstance(obj, str):
+        raise TypeError(
+            f"Expected a class, a class instance, a function or a string, "
+            f"but received {type(obj)}."
+        )
+    return obj
+
+
 def is_function(func):
     return hasattr(func, '__call__') and type(func) is not type
+
+
+def is_iterable(value):
+    return not isinstance(value, str) and hasattr(value, '__iter__')
 
 
 def humanize_list(value, callback=str, conjunction='and', oxford_comma=True):

@@ -7,7 +7,7 @@ from git_blame_project.utils import ensure_iterable, humanize_list, empty
 class Terminal:
     BOLD = '\033[1m'
     END = '\033[0m'
-    BLUE = '\033[34m'
+    BLUE = '\033[0;94m'
     CYAN = '\033[96m'
     GREEN = '\033[92m'
     YELLOW = '\033[33m'

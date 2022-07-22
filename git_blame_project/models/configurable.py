@@ -2,7 +2,8 @@ import functools
 import inspect
 
 from git_blame_project import stdout
-from git_blame_project.exceptions import GitBlameProjectError
+from git_blame_project.exceptions import (
+    GitBlameProjectError, ImproperUsageError)
 from git_blame_project.utils import (
     iterable_from_args, empty, humanize_list, ImmutableSequence, humanize_dict,
     LazyFn, is_function)
@@ -25,11 +26,11 @@ class ConfigError(GitBlameProjectError):
         return self._name
 
     @property
-    def message_prefix(self):
-        return f"There was an error configuring {self.cls.__name__}"
+    def content(self):
+        return f"There was an error configuring {self.cls_name}"
 
     @property
-    def content(self):
+    def detail(self):
         return f"The configuration `{self.name}` is invalid."
 
 
@@ -49,7 +50,7 @@ class ConfigurationError(GitBlameProjectError):
     object_required = True
 
     @property
-    def message_prefix(self):
+    def prefix(self):
         return f"The class {self.cls.__name__} cannot be configured"
 
 
@@ -146,10 +147,15 @@ class Config:
         from the provided value set, the value defined by this `default`
         parameter will be used.
 
-        The `default` parameter can be specified as an intrinsic type (string,
-        int, etc), a function that takes 0 arguments, a function that takes the
-        instance as it's first and only argument, or an instance of
-        :obj:`LazyFn`.
+        The `default` parameter can be specified as either:
+
+        (1) An intrinsic type (string, int, etc).  The type of the value
+            associated with the attribute for which the :obj:`Config` is
+            associated with.
+        (2) An instance of :obj:`LazyFn`.
+        (3) A callback function that takes 0 arguments.
+        (4) A callback function that takes 1 argument, the instance being
+            configured.
 
         Default: empty (i.e. Not Provided)
 
@@ -238,10 +244,13 @@ class Config:
                 return self.default()
             elif len(argspec.args) == 1:
                 return self.default(instance)
-            raise TypeError(
-                "If the default value is a callable, it must either take 0 "
-                "arguments or 1 argument - the instance associated with the "
-                "configuration."
+            raise ImproperUsageError(
+                cls=self,
+                func='default_value',
+                message=(
+                    "If the default value is a callable, it must either take 0 "
+                    "or 1 aruments."
+                )
             )
         return self.default
 
@@ -488,7 +497,7 @@ def ensure_configurability(is_property=False):
                 if not strict:
                     return None
                 instance.raise_cannot_configure(
-                    reason=f"The {instance.__class__} does not define any "
+                    reason=f"The {instance.__class__} class does not define any "
                     "configurations."
                 )
             can_configure = getattr(instance, 'can_configure', True)
@@ -569,7 +578,7 @@ class Configurable(metaclass=ConfigurableMetaClass):
     def config(self):
         if not hasattr(self, '_config'):
             raise TypeError(
-                f"The instance {self.__class__} was not configured.")
+                f"The {self.__class__} instance was not configured.")
         return self._config
 
     @ensure_configurability()

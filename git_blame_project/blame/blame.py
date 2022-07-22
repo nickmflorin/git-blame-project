@@ -101,6 +101,7 @@ class Blame(Configurable):
                         and len(filtered_files) == self.config.file_limit:
                     break
 
+        file_errors = []
         errors = []
         with click.progressbar(
             filtered_files,
@@ -117,14 +118,20 @@ class Blame(Configurable):
                 blamed_file = BlameFile.create(context)
                 if isinstance(blamed_file, BlameFileParserError):
                     if not blamed_file.silent:
-                        errors.append(blamed_file)
+                        file_errors.append(blamed_file)
                 else:
+                    if blamed_file.errors:
+                        errors += blamed_file.errors
                     blame_files.append(blamed_file)
 
+        if file_errors:
+            stdout.warning(
+                f"There were {len(file_errors)} files that could not be parsed:")
+            for error in file_errors:
+                stdout.warning(error.message)
         if errors:
             stdout.warning(
-                f"There were {len(errors)} files that could not be parsed:")
-
+                f"There were {len(errors)} lines that could not be parsed:")
             for error in errors:
                 stdout.warning(error.message)
         return blame_files

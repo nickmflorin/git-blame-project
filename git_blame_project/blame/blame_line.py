@@ -1,7 +1,5 @@
 import re
 
-import click
-
 from .attributes import (
     ParsedAttribute, IntegerParsedAttribute, DateTimeParsedAttribute,
     DependentAttribute, ExistingLineAttribute)
@@ -89,7 +87,6 @@ class BlameLine(LocationContextExtensible):
                 parsed_value = attr.parse(value, groups, self.context)
             except BlameLineAttributeParserError as e:
                 if not e.critical:
-                    click.echo(e.non_critical_message)
                     setattr(self, attr.name, None)
                 else:
                     # Raising the exception will cause the overall line to be

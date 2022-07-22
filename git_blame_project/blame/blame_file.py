@@ -1,22 +1,25 @@
 import subprocess
 
-from git_blame_project import stdout
-
 from .blame_line import BlameLine
 from .exceptions import BlameFileParserError, BlameLineParserError
 from .git_env import LocationContextExtensible
 
 
 class BlameFile(LocationContextExtensible):
-    def __init__(self, lines, **kwargs):
+    def __init__(self, lines, errors, **kwargs):
         super().__init__(**kwargs)
         self._lines = lines
+        self._errors = errors
 
     def __str__(self):
         return f"<BlameFile path={str(self.context.repository_file_path)}>"
 
     def __repr__(self):
         return f"<BlameFile path={str(self.context.repository_file_path)}>"
+
+    @property
+    def errors(self):
+        return self._errors
 
     @property
     def lines(self):
@@ -31,6 +34,7 @@ class BlameFile(LocationContextExtensible):
 
     @classmethod
     def create(cls, context):
+        errors = []
         try:
             result = subprocess.check_output(
                 ['git', 'blame', "%s" % context.absolute_file_path])
@@ -40,14 +44,14 @@ class BlameFile(LocationContextExtensible):
             try:
                 result = result.decode("utf-8")
             except UnicodeDecodeError as error:
-                return BlameFileParserError(context=context, detail=error)
+                return BlameFileParserError(context=context, detail=str(error))
 
             blame_lines = []
             for raw_line in result.split("\n"):
                 blamed = BlameLine(raw_line, context=context)
                 if isinstance(blamed, BlameLineParserError):
                     if not blamed.silent:
-                        stdout.warning(blamed.message)
+                        errors.append(blamed.message)
                 else:
                     blame_lines.append(blamed)
-            return cls(blame_lines, context=context)
+            return cls(blame_lines, errors, context=context)
