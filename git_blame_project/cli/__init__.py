@@ -1,16 +1,12 @@
 import sys
-
 import click
 
 import git_blame_project
-
-from git_blame_project.blame import Analyses, Blame, BlameLine
+from git_blame_project.blame import Analyses, Blame
 from git_blame_project.blame.analysis import LineBlameAnalysis
 
-from .constants import HelpText
-from .types import (
-    RootParamType, CommaSeparatedListType, OutputFileType, OutputFileDirType,
-    OutputTypeType, AnalysisType)
+from .options import options
+from .types import RootParamType
 
 
 def welcome_message():
@@ -29,29 +25,7 @@ def cli():
 
 @cli.command()
 @click.argument('repository', type=RootParamType(exists=True))
-@click.option('--file_limit', type=int, help=HelpText.FILE_LIMIT)
-@click.option('--dry_run', is_flag=True, default=False, help="")
-@click.option('--analyses', type=AnalysisType(), help=HelpText.ANALYSIS)
-@click.option('--output_type', type=OutputTypeType(), help=HelpText.OUTPUT_TYPE)
-@click.option('--output_file', type=OutputFileType(), help=HelpText.OUTPUT_FILE)
-@click.option(
-    '--output_dir',
-    type=OutputFileDirType(exists=True),
-    help=HelpText.OUTPUT_DIR
-)
-@click.option(
-    '--ignore_dirs',
-    type=CommaSeparatedListType(),
-    help=HelpText.IGNORE_DIRS
-)
-@click.option(
-    '--ignore_file_types',
-    type=CommaSeparatedListType(),
-    help=HelpText.IGNORE_FILE_TYPES
-)
-@click.option('--line_blame_columns', type=CommaSeparatedListType(
-    choices=[p.name for p in BlameLine.attributes]
-), help=HelpText.LINE_BLAME_COLUMS)
+@options
 def main(repository, **kwargs):
     welcome_message()
 
