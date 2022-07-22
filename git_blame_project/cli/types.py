@@ -85,8 +85,6 @@ class OutputFileDirType(DirectoryType):
 
 
 class OutputFileType(PathType):
-    INFER_FROM_OUTPUT_TYPE = "INFER_FROM_OUTPUT_TYPE"
-
     def __init__(self, *args, **kwargs):
         # We do not need to ensure that the full path exists in the case that
         # the path includes the filename.  We just need to ensure the directory

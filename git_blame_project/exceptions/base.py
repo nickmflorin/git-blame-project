@@ -6,6 +6,11 @@ from git_blame_project import utils
 
 
 def processor(func):
+    """
+    Decorates a `validate` or `format` method such that None values are
+    automatically excluded from the function call and the `obj` parameter
+    is only passed through if defined on the function signature.
+    """
     argspec = inspect.getfullargspec(func)
 
     @functools.wraps(func)
@@ -18,7 +23,7 @@ def processor(func):
     return decorated
 
 
-class Registration(ABC):
+class Attribute(ABC):
     """
     Base class for a descriptor that is used for attributes of the
     :obj:`AbstractException` class that is responsible for the following:
@@ -46,6 +51,10 @@ class Registration(ABC):
 
     @classmethod
     def lazy_init(cls, param, kwargs=None):
+        """
+        Returns a function that initializes the :obj:`Attribute` class with
+        the provided `param` and any potential keyword arguments.
+        """
         kwargs = kwargs = {}
 
         def instantiator(klass):
@@ -57,18 +66,31 @@ class Registration(ABC):
         # :obj:`AbstractException` instance.
         return value
 
-    def _format(self, obj, value):
-        # Define to format and standardize values before they are accessed on
-        # the :obj:`AbstractException` instance.
-        if hasattr(self, 'format'):
-            formatter = getattr(self, 'format')
-            return formatter(obj, value)
+    def format(self, obj, value):
+        # Override to format the value before it is returned when it is
+        # accessed on the :obj:`AbstractException` instance.
         return value
 
-    def get_obj_value(self, obj):
+    def get_instance_value(self, obj):
+        """
+        Returns the value associated with the param of the :obj:`Attribute`
+        instance on the exception **instance**:
+
+        >>> class MyException(AbstractException):
+        >>>     ...
+        >>> exception = MyException(detail=["The value is invalid."])
+        >>> exception.detail
+
+        This is not used in the case that the attribute is being accessed via
+        the exception class:
+
+        >>> class MyException(AbstractException):
+        >>>     ...
+        >>> MyException.detail
+        """
         if self._value is not utils.empty:
-            # In the case that the `_value` attribute was set on the Registration
-            # class, the `__set__` method of this Registration class was called
+            # In the case that the `_value` attribute was set on the Attribute
+            # class, the `__set__` method of this Attribute class was called
             # and the value was validated before it was set - so we do not need
             # to revalidate the value.
             return self._format(obj, self._value)
@@ -81,7 +103,7 @@ class Registration(ABC):
                 return self._format(obj, self._original)
             # In the case that the value exists statically on the Exception
             # class but is an @property, the value will not have been validated
-            # as it was not set via the `__set__` method on this Registration
+            # as it was not set via the `__set__` method on this Attribute
             # class and was not validated manually in the ExceptionMetaClass
             # when the class was created - so we have to validate the value
             # on retrieval.
@@ -93,8 +115,18 @@ class Registration(ABC):
         )
 
     def __get__(self, obj, objtype=None):
+        """
+        Accesses the formatted value associated with the `param` of this
+        :obj:`Attribute` instance on either the :obj:`AbstractException` class
+        or the :obj:`AbstractException` instance.
+
+        If the `obj` is non-null, the `obj` will represent the initialized
+        instance of the :obj:`AbstractException` class.  If the `obj` is null,
+        then the `objtype` - which represents the uninitialized
+        :obj:`AbstractException` class - will be non-null.
+        """
         if obj is not None:
-            return self.get_obj_value(obj)
+            return self.get_instance_value(obj)
         elif self._original is not None:
             if isinstance(self._original, property):
                 # Here, we are returning the @property instance.
@@ -110,12 +142,20 @@ class Registration(ABC):
         )
 
     def __set__(self, instance, value):
+        """
+        Validates the provided value associated with the `param` of this
+        :obj:`Attribute` instance and then sets the value on the
+        :obj:`AbstractException` instance.
+        """
+        # If the value being set is None but the attribute is statically defined
+        # on the :obj:`AbstractException` class, do not override it with a None
+        # value.
         if hasattr(instance.__class__, self.param) and value is None:
             return
         self._value = self.validate(instance, value)
 
 
-class StringRegistration(Registration):
+class StringAttribute(Attribute):
     @processor
     def validate(self, obj, value):
         if not isinstance(value, str):
@@ -130,7 +170,7 @@ class StringRegistration(Registration):
         return value.strip()
 
 
-class ObjectNameRegistration(Registration):
+class ObjectNameAttribute(Attribute):
     @processor
     def validate(self, obj, value):
         if not isinstance(value, (object, type)):
@@ -145,7 +185,7 @@ class ObjectNameRegistration(Registration):
         return utils.obj_name(value)
 
 
-class PrefixRegistration(StringRegistration):
+class PrefixAttribute(StringAttribute):
     def __init__(self, cls, param, is_detail=False):
         self._is_detail = is_detail
         super().__init__(cls, param)
@@ -167,7 +207,7 @@ class PrefixRegistration(StringRegistration):
         return value
 
 
-class MultipleStringRegistration(StringRegistration):
+class MultipleStringAttribute(StringAttribute):
     @processor
     def validate(self, obj, value):
         if not isinstance(value, (str, list, tuple)):
@@ -192,11 +232,11 @@ class MultipleStringRegistration(StringRegistration):
         return [v.strip() for v in value]
 
 
-class DetailPrefixRegistration(MultipleStringRegistration):
+class DetailPrefixAttribute(MultipleStringAttribute):
     @processor
     def format(self, obj, value):
         return [
-            PrefixRegistration.format(self, obj, v, end_char=":")
+            PrefixAttribute.format(self, obj, v, end_char=":")
             for v in value
         ]
 
@@ -213,27 +253,27 @@ class ExceptionMetaClass(type):
 
     (2) Replaces attributes that may have been defined statically on the
         :obj:`AbstractException` class with descriptors represented by the
-        :obj:`Registration` class.  If the attribute was not defined statically
+        :obj:`Attribute` class.  If the attribute was not defined statically
         on the :obj:`AbstractException` class, the attributes are still added
         to the :obj:`AbstractException` class with these descriptors.
 
         Ensuring that each attribute of the :obj:`AbstractException` class
-        uses the :obj:`Registration` descriptor ensures that all attribute
+        uses the :obj:`Attribute` descriptor ensures that all attribute
         values are properly validated and formatted, even in the case they are
         defined with static properties on the :obj:`AbstractException` class
         exception.
     """
     registrations = [
-        PrefixRegistration.lazy_init(
+        PrefixAttribute.lazy_init(
             param='prefix',
             kwargs={'is_detail': False}
         ),
-        DetailPrefixRegistration.lazy_init(param='detail_prefix'),
-        MultipleStringRegistration.lazy_init(param='detail'),
-        MultipleStringRegistration.lazy_init(param='detail_indent'),
-        StringRegistration.lazy_init(param='indent'),
-        StringRegistration.lazy_init(param='content'),
-        ObjectNameRegistration.lazy_init(param='cls_name')
+        DetailPrefixAttribute.lazy_init(param='detail_prefix'),
+        MultipleStringAttribute.lazy_init(param='detail'),
+        MultipleStringAttribute.lazy_init(param='detail_indent'),
+        StringAttribute.lazy_init(param='indent'),
+        StringAttribute.lazy_init(param='content'),
+        ObjectNameAttribute.lazy_init(param='cls_name')
     ]
 
     def __new__(cls, name, bases, dct):
@@ -275,7 +315,7 @@ class AbstractException(Exception, metaclass=ExceptionMetaClass):
     (3) Dynamically on initialization of the :obj:`AbstractException` class
         extension.
 
-    Each property uses a descriptor, the :obj:`Registration` class, which
+    Each property uses a descriptor, the :obj:`Attribute` class, which
     (in conjunction with the :obj:`ExceptionMetaClass` metaclass) is responsible
     for:
 
