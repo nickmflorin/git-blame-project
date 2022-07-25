@@ -1,7 +1,7 @@
 import pathlib
 from click.exceptions import BadParameter
 
-from git_blame_project import stdout, utils
+from git_blame_project import utils
 from .slug import Slug
 
 
@@ -81,12 +81,12 @@ class OutputTypes(Slug(
 
         self.validate_general_file_extension(ext, ctx, param)
         humanized = utils.humanize_list(
-            value=[stdout.bold.format(s) for s in self.slugs],
+            value=[utils.stdout.bold.format(s) for s in self.slugs],
             conjunction="and"
         )
         humanized_extensions = utils.humanize_list(
             value=[
-                stdout.bold.format(ext)
+                utils.stdout.bold.format(ext)
                 for ext in self.get_extensions()
             ],
             conjunction="and"
@@ -94,7 +94,7 @@ class OutputTypes(Slug(
         ext = utils.standardize_extension(ext)
         extensions = self.get_extensions()
 
-        formatted_ext = stdout.warning.format(ext, bold=True)
+        formatted_ext = utils.stdout.warning.format(ext, bold=True)
         if len(self) > 1 and ext not in extensions:
             # In the case that we are using multiple output types, the
             # filenames will be generated with extensions corresponding to
@@ -103,7 +103,7 @@ class OutputTypes(Slug(
             # will be ignored.  Generally, when providing the output types,
             # the file extension is not required and just the name of the
             # file can be provided.
-            stdout.warning(
+            utils.stdout.warning(
                 "The file extension is inconsistent with the provided "
                 f"output types {humanized}, which will generate files with "
                 f"extensions {humanized_extensions}."
@@ -115,9 +115,11 @@ class OutputTypes(Slug(
             )
         elif ext not in extensions:
             outputtype = self[0]
-            formatted_slug = stdout.warning.format(outputtype.slug, bold=True)
-            formatted_ot_ext = stdout.warning.format(outputtype.ext, bold=True)
-            stdout.warning(
+            formatted_slug = utils.stdout.warning.format(
+                outputtype.slug, bold=True)
+            formatted_ot_ext = utils.stdout.warning.format(
+                outputtype.ext, bold=True)
+            utils.stdout.warning(
                 "The file extension is inconsistent with the provided "
                 f"output type {formatted_slug}, "
                 f"which will generate a file with extension {formatted_ext}. "

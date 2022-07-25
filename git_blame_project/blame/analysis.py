@@ -3,7 +3,7 @@ import csv
 import pathlib
 import os
 
-from git_blame_project import stdout, utils
+from git_blame_project import utils, configurable
 from git_blame_project.models import Slug, OutputTypes, OutputType
 
 from .blame_line import BlameLine
@@ -59,16 +59,16 @@ TabularData = collections.namedtuple('TabularData', ['header', 'rows'])
 class Analysis(Slug(
     plural_model='git_blame_project.blame.analysis.Analyses',
     configuration=[
-        Slug.Config(name='dry_run', default=False),
-        Slug.Config(
-            name='repository',
+        configurable.Config(param='dry_run', default=False),
+        configurable.Config(
+            param='repository',
             required=True,
             formatter=utils.path_formatter()
         ),
-        Slug.Config(name='num_analyses', required=True),
-        Slug.Config(name='output_file', required=False),
-        Slug.Config(name='output_type', required=False),
-        Slug.Config(name='output_dir', default=utils.LazyFn(
+        configurable.Config(param='num_analyses', required=True),
+        configurable.Config(param='output_file', required=False),
+        configurable.Config(param='output_type', required=False),
+        configurable.Config(param='output_dir', default=utils.LazyFn(
             func=pathlib.Path,
             args=[os.getcwd]
         ))
@@ -89,10 +89,10 @@ class Analysis(Slug(
 
     @property
     def output_type(self):
-        if self.config.output_type is not None:
-            return self.config.output_type
-        elif self.config.output_file is not None:
-            return OutputTypes.from_extensions(self.config.output_file.extension)
+        if self.output_type is not None:
+            return self.output_type
+        elif self.output_file is not None:
+            return OutputTypes.from_extensions(self.output_file.extension)
         # TODO: Should we return the default?  Or should this represent a case
         # where we do not output?
         return OutputTypes.all()
@@ -102,45 +102,45 @@ class Analysis(Slug(
             OutputTypes.CSV.slug: self.output_csv,
             OutputTypes.EXCEL.slug: self.output_excel,
         }
-        for output_type in self.config.output_type:
+        for output_type in self.output_type:
             output_mapping[output_type.slug]()
 
     def default_output_file_name(self, suffix=None):
-        branch_name = get_git_branch(self.config.repository)
+        branch_name = get_git_branch(self.repository)
         if suffix is None and getattr(self, 'output_file_suffix'):
             suffix = self.output_file_suffix
         if suffix is not None:
             return (
-                f"{self.config.output_dir.parts[-1]}-{branch_name}-"
+                f"{self.output_dir.parts[-1]}-{branch_name}-"
                 f"{suffix}"
             )
-        return f"{self.config.output_dir.parts[-1]}-{branch_name}"
+        return f"{self.output_dir.parts[-1]}-{branch_name}"
 
     def default_output_file_path(self, output_type, suffix=None):
         return OutputType.for_slug(output_type) \
             .format_filename(self.default_output_file_name(suffix=suffix))
 
-    def output_file(self, output_type):
+    def output_file_path(self, output_type):
         # The output file is guaranteed to be an existing directory or a file
         # that may or may not exist, but in a parent directory that does exist.
         suffix = None
 
         self.default_output_file_name('csv')
-        if self.config.num_analyses > 1:
+        if self.num_analyses > 1:
             if getattr(self, 'output_file_suffix', None):
                 suffix = self.output_file_suffix
             else:
                 suffix = self.slug
-        if self.config.output_file is not None:
-            return self.config.output_file.filepath(output_type, suffix=suffix)
-        return self.config.output_dir / self.default_output_file_path(
+        if self.output_file is not None:
+            return self.output_file.filepath(output_type, suffix=suffix)
+        return self.output_dir / self.default_output_file_path(
             output_type=output_type,
             suffix=suffix
         )
 
     def output_csv(self):
-        output_file = self.output_file('csv')
-        stdout.info(f"Writing to {str(output_file)}")
+        output_file = self.output_file_path('csv')
+        utils.stdout.info(f"Writing to {str(output_file)}")
 
         if not hasattr(self, 'get_tabular_data'):
             raise TypeError(
@@ -148,22 +148,22 @@ class Analysis(Slug(
                 "method for retrieving the tabular data."
             )
         data = self.get_tabular_data()
-        if not self.config.dry_run:
+        if not self.dry_run:
             with open(str(output_file), 'w') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')
                 writer.writerow(data.header)
                 writer.writerows(data.rows)
 
     def output_excel(self):
-        stdout.not_supported("The `excel` output type is not yet supported.")
+        utils.stdout.not_supported("The `excel` output type is not yet supported.")
 
 
 @analysis(slug='line_blame')
 class LineBlameAnalysis(Analysis):
     configuration = [
-        Slug.Config(
-            name='columns',
-            plural_name='line_blame_columns',
+        configurable.Config(
+            param='columns',
+            accessor='line_blame_columns',
             default=[p.name for p in BlameLine.attributes]
         )
     ]
@@ -174,11 +174,11 @@ class LineBlameAnalysis(Analysis):
     def get_tabular_data(self):
         rows = []
         for file in self.result:
-            rows += file.csv_rows(self.config.columns)
+            rows += file.csv_rows(self.columns)
         return TabularData(
             header=[
                 attr.title for attr in BlameLine.attributes
-                if attr.name in self.config.columns
+                if attr.name in self.columns
             ],
             rows=rows
         )
@@ -210,13 +210,13 @@ class Analyses(Slug(
         'contributions_by_line': ContributionsByLineAnalysis(),
     },
     configuration=[
-        Slug.Config(
-            name='line_blame_columns',
+        configurable.Config(
+            param='line_blame_columns',
             required=False,
             default=[p.name for p in BlameLine.attributes]
         ),
-        Slug.Config(name='output_file', required=False),
-        Slug.Config(name='output_dir', default=utils.LazyFn(
+        configurable.Config(param='output_file', required=False),
+        configurable.Config(param='output_dir', default=utils.LazyFn(
             func=pathlib.Path,
             args=[os.getcwd]
         ))
@@ -230,9 +230,9 @@ class Analyses(Slug(
 
     @property
     def should_output(self):
-        return self.config.output_dir is not None \
-            or self.config.output_file is not None \
-            or self.config.output_type is not None
+        return self.output_dir is not None \
+            or self.output_file is not None \
+            or self.output_type is not None
 
     def output(self):
         for a in self:

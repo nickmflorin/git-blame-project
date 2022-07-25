@@ -99,7 +99,10 @@ disable=
   use-a-generator,
   unspecified-encoding,
   arguments-renamed,
-  super-with-arguments
+  super-with-arguments,
+  unnecessary-dunder-call,
+  method-hidden,
+  import-outside-toplevel
 
 
 [REPORTS]

@@ -1,411 +1,99 @@
-from abc import ABC
 import functools
-import inspect
 
 from git_blame_project import utils
 
-
-def processor(func):
-    """
-    Decorates a `validate` or `format` method such that None values are
-    automatically excluded from the function call and the `obj` parameter
-    is only passed through if defined on the function signature.
-    """
-    argspec = inspect.getfullargspec(func)
-
-    @functools.wraps(func)
-    def decorated(instance, obj, value, **kwargs):
-        if value is None:
-            return value
-        if 'obj' in argspec.args:
-            return func(instance, obj, value, **kwargs)
-        return func(instance, value, **kwargs)
-    return decorated
-
-
-class Attribute(ABC):
-    """
-    Base class for a descriptor that is used for attributes of the
-    :obj:`AbstractException` class that is responsible for the following:
-
-    (1) Validating the value of the property when it the :obj:`AbstractException`
-        class is initialized with the property, or validating the value of the
-        property when it is defined statically on the :obj:`AbstractException`
-        class.
-
-    (2) Formatting the value of the associated property when it is accessed on
-        the :obj:`AbstractException` class extension instance.
-
-    This class is abstract and is not meant to be used directly, but only via
-    an extension of this class.
-    """
-    def __init__(self, cls, param):
-        self._param = param
-        self._cls = cls
-        self._original = getattr(cls, self._param, None)
-        self._value = utils.empty
-
-    @property
-    def param(self):
-        return self._param
-
-    @classmethod
-    def lazy_init(cls, param, kwargs=None):
-        """
-        Returns a function that initializes the :obj:`Attribute` class with
-        the provided `param` and any potential keyword arguments.
-        """
-        kwargs = kwargs = {}
-
-        def instantiator(klass):
-            return cls(klass, param, **kwargs)
-        return instantiator
-
-    def validate(self, obj, value):
-        # Override to validate values before they are set on the
-        # :obj:`AbstractException` instance.
-        return value
-
-    def format(self, obj, value):
-        # Override to format the value before it is returned when it is
-        # accessed on the :obj:`AbstractException` instance.
-        return value
-
-    def get_instance_value(self, obj):
-        """
-        Returns the value associated with the param of the :obj:`Attribute`
-        instance on the exception **instance**:
-
-        >>> class MyException(AbstractException):
-        >>>     ...
-        >>> exception = MyException(detail=["The value is invalid."])
-        >>> exception.detail
-
-        This is not used in the case that the attribute is being accessed via
-        the exception class:
-
-        >>> class MyException(AbstractException):
-        >>>     ...
-        >>> MyException.detail
-        """
-        if self._value is not utils.empty:
-            # In the case that the `_value` attribute was set on the Attribute
-            # class, the `__set__` method of this Attribute class was called
-            # and the value was validated before it was set - so we do not need
-            # to revalidate the value.
-            return self._format(obj, self._value)
-        elif self._original is not None:
-            # In the case that the value exists statically on the Exception
-            # class and is not an @property, the ExceptionMetaClass will have
-            # validated the value manually when the class was created - so we
-            # do not need to revalidate the value.
-            if not isinstance(self._original, property):
-                return self._format(obj, self._original)
-            # In the case that the value exists statically on the Exception
-            # class but is an @property, the value will not have been validated
-            # as it was not set via the `__set__` method on this Attribute
-            # class and was not validated manually in the ExceptionMetaClass
-            # when the class was created - so we have to validate the value
-            # on retrieval.
-            value = self.validate(obj, self._original.fget(obj))
-            return self._format(obj, value)
-        raise AttributeError(
-            f"The attribute {self.param} does not exist on the {obj.__class__} "
-            "instance."
-        )
-
-    def __get__(self, obj, objtype=None):
-        """
-        Accesses the formatted value associated with the `param` of this
-        :obj:`Attribute` instance on either the :obj:`AbstractException` class
-        or the :obj:`AbstractException` instance.
-
-        If the `obj` is non-null, the `obj` will represent the initialized
-        instance of the :obj:`AbstractException` class.  If the `obj` is null,
-        then the `objtype` - which represents the uninitialized
-        :obj:`AbstractException` class - will be non-null.
-        """
-        if obj is not None:
-            return self.get_instance_value(obj)
-        elif self._original is not None:
-            if isinstance(self._original, property):
-                # Here, we are returning the @property instance.
-                return self._original.__get__(obj, objtype)
-            # Here, the value exists statically on the Exception class and
-            # is not an @property - the ExceptionMetaClass will have
-            # validated the value manually when the class was created - so we
-            # do not need to revalidate the value.
-            return self._original
-        raise AttributeError(
-            f"The attribute {self.param} does not exist on the {obj} "
-            "instance."
-        )
-
-    def __set__(self, instance, value):
-        """
-        Validates the provided value associated with the `param` of this
-        :obj:`Attribute` instance and then sets the value on the
-        :obj:`AbstractException` instance.
-        """
-        # If the value being set is None but the attribute is statically defined
-        # on the :obj:`AbstractException` class, do not override it with a None
-        # value.
-        if hasattr(instance.__class__, self.param) and value is None:
-            return
-        self._value = self.validate(instance, value)
-
-
-class StringAttribute(Attribute):
-    @processor
-    def validate(self, obj, value):
-        if not isinstance(value, str):
-            raise ImproperInitializationError(obj, message=(
-                f"Expected a string type for `{self.param}` parameter, but "
-                f"received {type(value)}."
-            ))
-        return value
-
-    @processor
-    def format(self, value):
-        return value.strip()
-
-
-class ObjectNameAttribute(Attribute):
-    @processor
-    def validate(self, obj, value):
-        if not isinstance(value, (object, type)):
-            raise ImproperInitializationError(obj, message=(
-                f"Expected a class or instance type for param `{self.param}` "
-                f"but received {type(value)}."
-            ))
-        return value
-
-    @processor
-    def format(self, value):
-        return utils.obj_name(value)
-
-
-class PrefixAttribute(StringAttribute):
-    def __init__(self, cls, param, is_detail=False):
-        self._is_detail = is_detail
-        super().__init__(cls, param)
-
-    def end_char(self, obj):
-        if not self._is_detail and obj.content is None:
-            return "."
-        # In the case that the detail is None, the entire line will be excluded
-        # so we do not need to worry about using a "." at the end of the prefix
-        # since the prefix will not be displayed.
-        return ":"
-
-    @processor
-    def format(self, obj, value, end_char=None):
-        value = value.strip()
-        end_char = end_char or self.end_char(obj)
-        if not value.endswith(end_char):
-            return f"{value}{end_char}"
-        return value
-
-
-class MultipleStringAttribute(StringAttribute):
-    @processor
-    def validate(self, obj, value):
-        if not isinstance(value, (str, list, tuple)):
-            raise ImproperInitializationError(obj, message=(
-                f"Expected a string, list or tuple type for `{self.param}` "
-                f"parameter, but received {type(value)}."
-            ))
-        elif isinstance(value, (list, tuple)):
-            non_string_details = [d for d in value if not isinstance(d, str)]
-            if non_string_details:
-                non_string_types = set([type(d) for d in non_string_details])
-                humanized = utils.humanize_list(non_string_types)
-                raise ImproperInitializationError(obj, message=(
-                    f"Expected all elements of the iterable for the "
-                    f"`{self.param}` param to be a string, but received "
-                    f"{humanized}."
-                ))
-        return utils.ensure_iterable(value)
-
-    @processor
-    def format(self, value):
-        return [v.strip() for v in value]
-
-
-class DetailPrefixAttribute(MultipleStringAttribute):
-    @processor
-    def format(self, obj, value):
-        return [
-            PrefixAttribute.format(self, obj, v, end_char=":")
-            for v in value
-        ]
-
-
-class ExceptionMetaClass(type):
-    """
-    A Metaclass for the :obj:`AbstractException` class that provides two
-    implementations:
-
-    (1) Guarantees that extensions of the :obj:`AbstractException` do not define
-        a `message` attribute statically.  This ensures that the formatting
-        of all exceptions in the project is consistent and composed of the
-        individual attributes of the :obj:`AbstractException` class.
-
-    (2) Replaces attributes that may have been defined statically on the
-        :obj:`AbstractException` class with descriptors represented by the
-        :obj:`Attribute` class.  If the attribute was not defined statically
-        on the :obj:`AbstractException` class, the attributes are still added
-        to the :obj:`AbstractException` class with these descriptors.
-
-        Ensuring that each attribute of the :obj:`AbstractException` class
-        uses the :obj:`Attribute` descriptor ensures that all attribute
-        values are properly validated and formatted, even in the case they are
-        defined with static properties on the :obj:`AbstractException` class
-        exception.
-    """
-    registrations = [
-        PrefixAttribute.lazy_init(
-            param='prefix',
-            kwargs={'is_detail': False}
-        ),
-        DetailPrefixAttribute.lazy_init(param='detail_prefix'),
-        MultipleStringAttribute.lazy_init(param='detail'),
-        MultipleStringAttribute.lazy_init(param='detail_indent'),
-        StringAttribute.lazy_init(param='indent'),
-        StringAttribute.lazy_init(param='content'),
-        ObjectNameAttribute.lazy_init(param='cls_name')
-    ]
-
-    def __new__(cls, name, bases, dct):
-        if name != 'AbstractException':
-            # We do not allow the `message` attribute to be statically defined
-            # on classes that extend the AbstractException base class.
-            if 'message' in dct:
-                raise TypeError(
-                    f"The exception class {name} extends `AbstractException` "
-                    "and cannot define the `message` attribute statically."
-                )
-        klass = super().__new__(cls, name, bases, dct)
-        for registration in cls.registrations:
-            registration_instance = registration(klass)
-            existing_value = getattr(klass, registration_instance.param, None)
-            # In the case that the value exists statically on the Exception
-            # class but is not an @property, we have to validate the value
-            # when the class is being created.
-            if existing_value is not None \
-                    and not isinstance(existing_value, property):
-                registration_instance.__set__(klass, existing_value)
-            setattr(klass, registration_instance.param, registration_instance)
-        return klass
+from .meta import ExceptionMetaClass
+from .models import StringFormatChoices, Formatter, ExceptionAttribute
 
 
 class AbstractException(Exception, metaclass=ExceptionMetaClass):
     """
-    Abstract base class for all :obj:`Extension` classes used in this project.
-    This :obj:`Extension` class should never be used alone, but only via an
-    :obj:`Extension` class that extends it.
-
-    All properties of the :obj:`AbstractException` instance can be provided
-    by one of three means (ordered by priority when a property is defined
-    by multiple means):
-
-    (1) Statically on the :obj:`AbstractException` class extension.
-    (2) Dynamically on the :obj:`AbstractException` class extension via
-        @property.
-    (3) Dynamically on initialization of the :obj:`AbstractException` class
-        extension.
-
-    Each property uses a descriptor, the :obj:`Attribute` class, which
-    (in conjunction with the :obj:`ExceptionMetaClass` metaclass) is responsible
-    for:
-
-    (1) Validating the value of the property when it the :obj:`AbstractException`
-        class is initialized with the property, or validating the value of the
-        property when it is defined statically on the :obj:`AbstractException`
-        class.
-    (2) Formatting the value of the associated property when it is accessed on
-        the :obj:`AbstractException` class extension instance.
+    Abstract base class for all :obj:`Exception` classes used in this project.
+    This :obj:`Exception` class should never be used alone, but only via an
+    :obj:`Exception` class that extends it.
 
     Parameters:
     ----------
-    content: :obj:`str` (optional)
-        The exception content refers to the core message the exception will
-        display in its string form.  The content is displayed in first line of
-        the exception string.
+    For all attributes of the :obj:`AbstractException` class and its
+    extensions, each attribute can be established in the following ways:
 
-        The message content of the exception class can be defined in a variety
-        of ways:
+    (1) Statically on the :obj:`AbstractException` class as a simple property.
+    (2) Statically on the :obj:`AbstractException` class as an @property.
+    (3) Dynamically on initialization of the :obj:`AbstractException` class.
 
-        (1) Statically on the exception class via a `content` @property or
-            string with the attribute name `content`.
+    In all cases, the :obj:`ExceptionMetaClass` will be used to wrap the
+    attribute in an @property to ensure it is retrieved from the correct
+    source (initialization arguments or static class attributes) and
+    formatted when accessed.
 
-            >>> class MyCustomException(AbstractException):
-            >>>     @property
-            >>>     def content(self):
-            >>>         return "Main exception message."
+    Additionally, all parameters of exceptions that extend the this base
+    :obj:`AbstractException` class can have a default value defined statically
+    on the class, `default_<attribute_name>` - which will only be used in the
+    case that it is not provided via initialization and not defined statically
+    on the class.
 
-        (2) Dynamically on exception initialization via a positional argument
-            or a keyword argument `message`.
+    >>> class MyCustomException(AbstractException):
+    >>>     default_klass = 'MyCustomObj'
+    >>>
+    >>> exc = MyCustomException(klass=MySecondCustomObj)
+    >>> exc.klass = 'MySecondCustomObj'
+    >>>
+    >>> exc = MyCustomException()
+    >>> exc.klass = 'MyCustomObj'
 
-            >>> class MyCustomException(AbstractException):
-            >>>     pass
-            >>> exc = MyCustomException(message="Main exception message.")
-            >>> exc = MyCustomException("Main exception message.")
+    content: :obj:`str` or :obj:`tuple` or :obj:`list` (optional)
+        Either a :obj:`str` or an iterable of :obj:`str` instances that refer
+        to the core message the exception will display in the string form of the
+        exception on the first line.
 
-        If the `prefix` parameter is not defined or provided, the `content`
-        parameter must be defined or provided - otherwise there is no way to
-        construct the core exception message.
+        The :obj:`str` instance, or each :obj:`str` instance in the iterable,
+        can contain string formatted arguments that are properties on the
+        :obj:`AbstractException` instance they are associated with.  These
+        string formatted arguments will be automatically included in the message
+        when the :obj:`AbstractException` renders if they are present on the
+        :obj:`AbstractException` instance and non-null.
+
+        If the `content` parameter is an iterable of :obj:`str` instances, the
+        :obj:`str` instance in the iterable will be chosen such that the number
+        of non-null string formatted arguments associated with the :obj:`str`
+        instance is optimized.
+
+        Example:
+        -------
+        Consider the following `content` definition:
+
+        >>> content = [
+        >>>     "The {animal} jumped over the {object}.",
+        >>>     "The {animal} jumped over something.",
+        >>>     "Some animal jumped over something."
+        >>> ]
+
+        Assume that we have an exception instance `e = MyException()` that
+        defines the `content` attribute as shown above, if `e.animal` is not
+        None but `e.object` is None, the second formatted string in the
+        `content` array will be used.
 
         Default: None
 
-    prefix: :obj:`str` (optional)
-        A :obj:`str` that will be displayed in front of the main exception
-        `content` in the string form of the exception instance.
+    prefix: :obj:`str` or :obj:`tuple` or :obj:`list` (optional)
+        Either a :obj:`str` or an iterable of :obj:`str` instances that will
+        be displayed in front of the main exception `content` in the string
+        form of the exception instance.
 
-        Like all other attributes of the exception class, the `prefix` attribute
-        can be defined statically on the class or on initialization of the
-        exception class instance.
+        The :obj:`str` instance can contain string formatted arguments that
+        are properties on the :obj:`AbstractException` instance they are
+        used to initialize.
 
-        If the `content` parameter is not defined or provided, the `prefix`
-        parameter must be defined or provided - otherwise there is no way to
-        construct the core exception message.
+        If the `prefix` parameter is an iterable of :obj:`str` instances, the
+        :obj:`str` instance in the iterable will be chosen such that the number
+        of non-null string formatted arguments associated with the :obj:`str`
+        instance is optimized.
 
         Default: None
 
     indent: :obj:`str` (optional)
         A :obj:`str` that will be displayed in front of the combined message
         `content` and `prefix`.  This will typically be an empty string.
-
-        Like all other attributes of the exception class, the `indent` attribute
-        can be defined statically on the class or on initialization of the
-        exception class instance.
-
-        Default: None
-
-    cls or instance: A class type or any class instance (optional)
-        The class or instance that the exception may be related to - if
-        applicable.  This property is only used for extensions of the
-        :obj:`AbstractException` class that want to reference it in the
-        string form of the exception.
-
-        The cls or instance the exception is related to can be defined in a
-        variety of ways:
-
-        (1) Statically on the exception class via a `content` @property or
-            string with the attribute name `cls` or `instance`:.
-
-            >>> class MyCustomException(AbstractException):
-            >>>     @property
-            >>>     def cls(self):
-            >>>         return MyCustomObj
-
-        (2) Dynamically on exception initialization via a positional argument
-            or a keyword argument `cls` or `instance`:.
-
-            >>> class MyCustomException(AbstractException):
-            >>>     pass
-            >>> exc = MyCustomException(cls=MyCustomObj)
-            >>> exc = MyCustomException("Main exception message.", MyCustomObj)
 
         Default: None
 
@@ -424,10 +112,6 @@ class AbstractException(Exception, metaclass=ExceptionMetaClass):
         >>> "Core message."
         >>> "Detail: The value was invalid."
 
-        Like all other attributes of the exception class, the `detail` attribute
-        can be defined statically on the class or on initialization of the
-        exception class instance.
-
         Default: None
 
     detail_prefix: :obj:`str` or :obj:`tuple` or :obj:`list` (optional)
@@ -438,10 +122,6 @@ class AbstractException(Exception, metaclass=ExceptionMetaClass):
         If it is desired that the same prefix be used for all details, it can
         be provided as a simple string.  Otherwise, it can be provided as an
         array to indicate the specific prefixes to use for each detail line.
-
-        Like all other attributes of the exception class, the `detail_prefix`
-        attribute can be defined statically on the class or on initialization of
-        the exception class instance.
 
         Default: None
 
@@ -454,100 +134,114 @@ class AbstractException(Exception, metaclass=ExceptionMetaClass):
         be provided as a simple string.  Otherwise, it can be provided as an
         array to indicate the specific indents to use for each detail line.
 
-        Like all other attributes of the exception class, the `detail_indent`
-        attribute can be defined statically on the class or on initialization of
-        the exception class instance.
-
         Default: "--> "
     """
-    detail_indent = "--> "
-    indent = None
+    attributes = [
+        ExceptionAttribute(name='detail', formatter=utils.ensure_iterable),
+        ExceptionAttribute(
+            name='detail_indent',
+            formatter=utils.ensure_iterable
+        ),
+        ExceptionAttribute(name='indent'),
+        ExceptionAttribute(
+            name='content',
+            accessor='message',
+            formatter=Formatter(lambda instance: [
+                utils.ensure_iterable,
+                StringFormatChoices.flattener(instance),
+                functools.partial(
+                    utils.conditionally_format_string,
+                    obj=instance
+                )
+            ])
+        ),
+        ExceptionAttribute(
+            name='detail_prefix',
+            formatter=Formatter(lambda instance: [
+                utils.ensure_iterable,
+                StringFormatChoices.flattener(instance),
+                functools.partial(
+                    utils.conditionally_format_string,
+                    obj=instance,
+                    # We want each detail prefix to be formatted and returned.
+                    optimized=False,
+                )
+            ])
+        ),
+        ExceptionAttribute(
+            name='prefix',
+            formatter=Formatter(lambda instance: [
+                utils.ensure_iterable,
+                StringFormatChoices.flattener(instance),
+                functools.partial(
+                    utils.conditionally_format_string,
+                    obj=instance,
+                )
+            ])
+        ),
+    ]
+    default_detail_indent = "--> "
 
-    def __init__(self, *args, **kwargs):
-        if len(args) not in (0, 1, 2):
-            raise ImproperInitializationError(self, message=(
-                "Expected 0, 1 or 2 positional arguments, but received "
-                f"{len(args)}."
-            ))
-        if len(args) == 2:
-            if isinstance(args[0], str):
-                self.content = args[0]
-                self.cls_name = args[1]
-            elif isinstance(args[1], str):
-                self.content = args[1]
-                self.cls_name = args[0]
-            else:
-                raise ImproperInitializationError(self, message=(
-                    "Expected both a class or instance type and a message "
-                    f"string, but received {type(args[0])} and {type(args[1])}."
-                ))
-        elif len(args) == 1:
-            if isinstance(args[0], str):
-                self.content = args[0]
-                self.cls_name = utils.pluck_first_kwarg(
-                    'cls', 'instance', **kwargs)
-            else:
-                self._cls_name = self.cls_name = args[0]
-                self.content = kwargs.pop('message', None)
-        else:
-            self.cls_name = utils.pluck_first_kwarg(
-                'cls', 'instance', **kwargs)
-            self.content = kwargs.pop('message', None)
-
-        self.detail = kwargs.pop('detail', None)
-        self.detail_prefix = kwargs.pop('detail_prefix', None)
-        self.prefix = kwargs.pop('prefix', None)
-        self.detail_indent = kwargs.pop('detail_indent', None)
-        self.indent = kwargs.pop('indent', None)
-
-        if getattr(self, 'object_required', False) and self.cls_name is None:
-            raise TypeError(
-                "The object class or instance is required to initialize "
-                f"{self.__class__}."
-            )
+    def __init__(self, **kwargs):
+        for attr in self.attributes:
+            required_attrs_on_init = getattr(self, 'required_on_init', [])
+            if attr.accessor in required_attrs_on_init \
+                    and kwargs.get(attr.accessor, None) is None:
+                raise TypeError(
+                    f"The parameter {attr.accessor} is required to initialize "
+                    f"the exception class {self.__class__}."
+                )
+            setattr(self, f'_{attr.name}', kwargs.pop(attr.accessor, None))
 
     def get_detail_attribute(self, i, attr):
-        assert attr in ('detail_prefix', 'detail_indent'), \
-            f"Invalid detail attribute {attr} provided."
-
         if getattr(self, attr) is None:
             return None
         try:
             return getattr(self, attr)[i]
-        except IndexError as e:
+        except IndexError:
             # If there is only one attribute in the array, it means that it was
             # most likely provided as a single value and it should be used for
             # all details in the array.
             if len(getattr(self, attr)) == 1:
                 return getattr(self, attr)[0]
-            raise ImproperInitializationError(
-                instance=self,
-                message=(
-                    f"The exception class contains {len(self.detail)} details "
-                    f"but only {len(getattr(self, attr))} {attr}(s).  If "
-                    f"the details {attr}(s) are provided as arrays, their "
-                    "lengths must be consistent."
-                )
-            ) from e
+            # If there is more than one attribute in the array, but the index
+            # doesn't exist (i.e. the array is too short) - just return the last
+            # element of the array.
+            return getattr(self, attr)[-1]
+
+    @classmethod
+    def opposite_end_char(cls, end_char):
+        return {
+            '.': ':',
+            ':': '.'
+        }[end_char]
+
+    @classmethod
+    def format_prefix_value(cls, value, msg):
+        end_char = '.' if msg is None else ':'
+        if value is not None:
+            if not value.endswith(end_char):
+                if value.endswith(cls.opposite_end_char(end_char)):
+                    value = value[:-1]
+                return f"{value}{end_char}"
+        return value
 
     @property
     def message(self):
-        if self.prefix is None and self.content is None:
-            raise ImproperInitializationError(
-                instance=self,
-                message=(
-                    f"The exception class {self.__class__} does not define a "
-                    "message or a prefix."
-                )
-            )
         message_components = [utils.cjoin(
-            self.indent, self.prefix, self.content)]
+            self.indent,
+            self.format_prefix_value(self.prefix, self.content),
+            self.content
+        )]
         if self.detail is not None:
             message_components += [
                 utils.cjoin(
                     self.get_detail_attribute(i, 'detail_indent'),
-                    self.get_detail_attribute(i, 'detail_prefix'),
-                    d
+                    self.format_prefix_value(
+                        self.get_detail_attribute(i, 'detail_prefix'),
+                        d
+                    ),
+                    utils.conditionally_format_string(d, self)
                 )
                 for i, d in enumerate(self.detail)
             ]
@@ -555,34 +249,3 @@ class AbstractException(Exception, metaclass=ExceptionMetaClass):
 
     def __str__(self):
         return self.message
-
-
-class ImproperInitializationError(AbstractException):
-    object_required = True
-
-    @property
-    def prefix(self):
-        return f"Improper Initialization of {self.cls_name}"
-
-
-class ImproperUsageError(AbstractException):
-    object_required = True
-
-    def __init__(self, *args, **kwargs):
-        self._func = kwargs.pop('func', None)
-        super().__init__(*args, **kwargs)
-
-    @property
-    def func_name(self):
-        if self._func is not None:
-            return utils.obj_name(self._func)
-        return self._func
-
-    @property
-    def prefix(self):
-        if self._func is not None:
-            return (
-                f"Improper Usage of Method {self.func_name} "
-                f"on {self.cls_name}."
-            )
-        return f"Improper Usage of {self.cls_name}."

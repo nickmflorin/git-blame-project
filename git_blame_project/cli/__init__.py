@@ -2,8 +2,10 @@ import sys
 import click
 
 import git_blame_project
+from git_blame_project import utils, configurable, models, exceptions
 from git_blame_project.blame import Analyses, Blame
 from git_blame_project.blame.analysis import LineBlameAnalysis
+from git_blame_project import models
 
 from .options import options
 from .types import RootParamType
@@ -29,7 +31,8 @@ def cli():
 def main(repository, **kwargs):
     welcome_message()
 
-    kwargs.setdefault('analyses', Analyses(LineBlameAnalysis()))
+    kwargs.setdefault('analyses', Analyses('line_blame'))
+
     kwargs['analyses'] = kwargs['analyses'].to_dynamic(config={
         'repository': repository,
         'line_blame_columns': kwargs.pop('line_blame_columns'),

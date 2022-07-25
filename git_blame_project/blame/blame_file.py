@@ -39,7 +39,7 @@ class BlameFile(LocationContextExtensible):
             result = subprocess.check_output(
                 ['git', 'blame', "%s" % context.absolute_file_path])
         except subprocess.CalledProcessError as error:
-            return BlameFileParserError(context=context, detail=error)
+            return BlameFileParserError(context=context, detail=str(error))
         else:
             try:
                 result = result.decode("utf-8")

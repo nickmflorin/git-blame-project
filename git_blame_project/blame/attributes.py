@@ -45,10 +45,12 @@ class DependentAttribute(LineAttribute):
     def __init__(self, name, title, **kwargs):
         super().__init__(name, title)
         if not hasattr(self, 'parse') and 'parse' not in kwargs:
-            raise TypeError(
-                "A dependent attribute must either define a `parse` method "
-                "statically on the class or be provided with the method "
-                "on initialization."
+            raise exceptions.ImproperUsageError(
+                instance=self,
+                message=(
+                    "The `parse` method must either be defined statically on "
+                    "the {cls_name} class or be provided on initialization."
+                )
             )
         self._parse = kwargs.get('parse', None)
 
@@ -125,8 +127,8 @@ class ExistingLineAttribute(DependentAttribute):
         # formatted attribute value - which will usually differ from the
         # original attribute value - will be set on the instance.
         if self._formatter is not None and self._attr is None:
-            raise exceptions.ImproperInitializationError(
-                self,
+            raise exceptions.ImproperUsageError(
+                instance=self,
                 message=(
                     "If the `formatter` parameter is provided, the `attr` must "
                     "also be provided such that the formatted value does not "

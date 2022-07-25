@@ -3,7 +3,7 @@ import pathlib
 
 import click
 
-from git_blame_project import stdout, utils, models
+from git_blame_project import utils, configurable
 
 from .analysis import Analyses, LineBlameAnalysis
 from .blame_file import BlameFile
@@ -12,25 +12,29 @@ from .exceptions import BlameFileParserError
 from .git_env import repository_directory_context, LocationContext
 
 
-class Blame(models.Configurable):
+class Blame(configurable.Configurable):
+    configure_on_init = True
     configuration = [
-        models.Config(
-            name='ignore_dirs',
-            default=set(DEFAULT_IGNORE_DIRECTORIES),
-            formatter=lambda v: set(v + DEFAULT_IGNORE_DIRECTORIES)
+        configurable.Config(
+            param='ignore_dirs',
+            default=list(set(DEFAULT_IGNORE_DIRECTORIES)),
+            formatter=lambda v: set(list(v) + DEFAULT_IGNORE_DIRECTORIES)
         ),
-        models.Config(
-            name='ignore_file_types',
+        configurable.Config(
+            param='ignore_file_types',
             default=utils.standardize_extensions(DEFAULT_IGNORE_FILE_TYPES),
             formatter=lambda v: set(utils.standardize_extensions(
                 v + DEFAULT_IGNORE_FILE_TYPES))
         ),
-        models.Config(name='file_limit'),
-        models.Config(name='analyses', default=Analyses(LineBlameAnalysis()))
+        configurable.Config(param='file_limit'),
+        configurable.Config(
+            param='analyses',
+            default=Analyses(LineBlameAnalysis())
+        )
     ]
 
     def __init__(self, repository, **kwargs):
-        super().__init__(config=kwargs)
+        super().__init__(**kwargs)
         self._repository = repository
 
     def __call__(self):
@@ -38,7 +42,7 @@ class Blame(models.Configurable):
         # located in such that we can access the `git` command line tools.
         with repository_directory_context(self.repository):
             files = self.perform_blame()
-        self.config.analyses(files)
+        self.analyses(files)
 
     @property
     def repository(self):
@@ -47,10 +51,10 @@ class Blame(models.Configurable):
     def perform_blame(self):
         blame_files = []
 
-        stdout.info("Filtering out files that should be ignored.")
+        utils.stdout.info("Filtering out files that should be ignored.")
         flattened_files = []
 
-        stdout.info("Collecting Files in the Repository")
+        utils.stdout.info("Collecting Files in the Repository")
         flattened_files = []
         for path, _, files in os.walk(self.repository):
             file_dir = pathlib.Path(path)
@@ -58,14 +62,14 @@ class Blame(models.Configurable):
                 flattened_files.append((file_dir, file_name))
 
         limit = len(flattened_files)
-        if self.config.file_limit is not None:
-            limit = min(self.config.file_limit, limit)
+        if self.file_limit is not None:
+            limit = min(self.file_limit, limit)
 
         filtered_files = []
 
         with click.progressbar(
             length=limit,
-            label=stdout.info('Filtering Files', display=False),
+            label=utils.stdout.info('Filtering Files', display=False),
             color='blue'
         ) as progress_bar:
             for file_dir, file_name in flattened_files:
@@ -73,21 +77,21 @@ class Blame(models.Configurable):
                 # This seems to be happening occasionally with paths that are
                 # in directories that typically should be ignored (like .git).
                 if file_name == "None":
-                    if self.config.file_limit is None:
+                    if self.file_limit is None:
                         # If there is a file limit, we only want to update the
                         # progress bar when we encounter a valid file.
                         progress_bar.update(1)
                     continue
 
-                elif any([p in self.config.ignore_dirs for p in file_dir.parts]):
-                    if self.config.file_limit is None:
+                elif any([p in self.ignore_dirs for p in file_dir.parts]):
+                    if self.file_limit is None:
                         # If there is a file limit, we only want to update the
                         # progress bar when we encounter a valid file.
                         progress_bar.update(1)
                     continue
 
-                elif file_path.suffix.lower() in self.config.ignore_file_types:
-                    if self.config.file_limit is None:
+                elif file_path.suffix.lower() in self.ignore_file_types:
+                    if self.file_limit is None:
                         # If there is a file limit, we only want to update the
                         # progress bar when we encounter a valid file.
                         progress_bar.update(1)
@@ -95,15 +99,16 @@ class Blame(models.Configurable):
 
                 filtered_files.append((file_dir, file_name))
                 progress_bar.update(1)
-                if self.config.file_limit is not None \
-                        and len(filtered_files) == self.config.file_limit:
+                if self.file_limit is not None \
+                        and len(filtered_files) == self.file_limit:
                     break
 
         file_errors = []
         errors = []
         with click.progressbar(
             filtered_files,
-            label=stdout.info('Performing Blame on Each File', display=False),
+            label=utils.stdout.info(
+                'Performing Blame on Each File', display=False),
             length=len(filtered_files)
         ) as progress_bar:
             for file_dir, file_name in progress_bar:
@@ -123,13 +128,13 @@ class Blame(models.Configurable):
                     blame_files.append(blamed_file)
 
         if file_errors:
-            stdout.warning(
+            utils.stdout.warning(
                 f"There were {len(file_errors)} files that could not be parsed:")
             for error in file_errors:
-                stdout.warning(error.message)
+                utils.stdout.warning(error.message)
         if errors:
-            stdout.warning(
+            utils.stdout.warning(
                 f"There were {len(errors)} lines that could not be parsed:")
             for error in errors:
-                stdout.warning(error.message)
+                utils.stdout.warning(error.message)
         return blame_files

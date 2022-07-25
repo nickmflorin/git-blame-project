@@ -1,12 +1,13 @@
+from configparser import ConfigParser
 import click
 
 from git_blame_project import utils
-from git_blame_project.blame import BlameLine
+from git_blame_project.blame import BlameLine, Analysis
 
 from .help import HelpText
 from .types import (
     CommaSeparatedListType, OutputFileType, OutputFileDirType, OutputTypeType,
-    AnalysisType)
+    AnalysisType, PathType)
 
 
 class Option:
@@ -30,6 +31,27 @@ class Options(utils.ImmutableSequence):
         return func
 
 
+# def configure(ctx, param, filename):
+#     cfg = ConfigParser()
+#     cfg.read(filename)
+#     try:
+#         options = dict(cfg['options'])
+#     except KeyError:
+#         options = {}
+
+#     for k, v in dict(cfg).items():
+#         print(k, v)
+#         if k.startswith('analyses.'):
+#             analysis_type = k.split('analyses.')[1]
+#             obj = Analysis.for_slug(analysis_type)
+
+#             import ipdb; ipdb.set_trace()
+
+
+
+#     ctx.default_map = options
+
+
 options = Options(
     Option('file_limit', type=int, help_text=HelpText.FILE_LIMIT),
     Option('dry_run', is_flag=True, default=False),
@@ -41,6 +63,12 @@ options = Options(
         type=OutputFileDirType(exists=True),
         help_text=HelpText.OUTPUT_DIR
     ),
+    # Option(
+    #     name='config',
+    #     type=PathType(exists=True, dir_okay=False),
+    #     callback=configure,
+    #     help_text=""
+    # ),
     Option(
         name='ignore_dirs',
         type=CommaSeparatedListType(),

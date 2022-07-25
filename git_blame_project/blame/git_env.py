@@ -3,7 +3,7 @@ import os
 import pathlib
 import subprocess
 
-from git_blame_project import stdout, utils
+from git_blame_project import utils, exceptions
 
 
 @contextlib.contextmanager
@@ -22,7 +22,7 @@ def get_git_branch(repository):
         try:
             result = result.decode("utf-8")
         except UnicodeDecodeError:
-            stdout.warning(
+            utils.stdout.warning(
                 "There was an error determining the current git branch for "
                 "purposes of auto-generating a filename.  A placeholder value "
                 "will be used."
@@ -32,7 +32,7 @@ def get_git_branch(repository):
         for line in lines:
             if line.startswith("*"):
                 return line.split("*")[1].strip()
-        stdout.warning(
+        utils.stdout.warning(
             "There was an error determining the current git branch for "
             "purposes of auto-generating a filename.  A placeholder value "
             "will be used."
@@ -56,13 +56,7 @@ class LocationContext:
         else:
             missing_kwargs = [a for a in self.attrs if a not in kwargs]
             if missing_kwargs:
-                if len(missing_kwargs) == 1:
-                    raise TypeError(
-                        f"The parameter `{missing_kwargs[0]}` is required.")
-                else:
-                    humanized = utils.humanize_list(
-                        [f"`{a}`" for a in missing_kwargs])
-                    raise ValueError(f"The parameters {humanized} are required.")
+                raise exceptions.RequiredParamError(param=missing_kwargs)
 
             self._repository = kwargs['repository']
             self._repository_path = kwargs['repository_path']

@@ -1,7 +1,4 @@
-from git_blame_project import utils
-
-from .configurable import Configurable, Config, ConfigurableMetaClass
-from .parsers import parse_param
+from git_blame_project import utils, configurable, exceptions
 
 
 def to_model(value):
@@ -27,6 +24,16 @@ static_map = {
 }
 
 
+# ensure_static = exceptions.check_instance(
+#     exc_cls=ConfigNotBoundError,
+#     exc_kwargs=lambda instance: {"param": instance.slug},
+#     exc_message=f"{"
+#     criteria=[
+#         exceptions.Criteria(attr='is_static')
+#     ]
+# )
+
+
 def is_static(instance_or_cls, static=utils.empty, dynamic=utils.empty):
     reference = utils.klass(instance_or_cls).__name__
     if (static, dynamic) not in static_map:
@@ -38,7 +45,7 @@ def is_static(instance_or_cls, static=utils.empty, dynamic=utils.empty):
     return static_map[(static, dynamic)]
 
 
-class SingleSlugMetaClass(ConfigurableMetaClass):
+class SingleSlugMetaClass(configurable.ConfigurableMetaClass):
     def __new__(cls, name, bases, dct):
         if len(bases) not in (0, 1):
             raise TypeError("Slugs do not support multiple inheritance.")
@@ -262,14 +269,19 @@ def Slug(**options):
             "discrete choices for that slug model."
         )
 
-    # The configuration options can be provided in both plural and singular
-    # contexts.
-    static_configuration = options.pop('configuration', [])
+    configuration = options.pop('configuration', configurable.NotConfigurable)
 
-    class SlugCommon(Configurable):
+    class SlugCommon(configurable.Configurable):
+        configure_on_init = True
+
         def __init__(self, config=None, static=utils.empty, dynamic=utils.empty):
             self._static = is_static(self, static=static, dynamic=dynamic)
-            super().__init__(config=config)
+            # Even though the class extends :obj:`Configurable`, it will not
+            # have the behaviors and properties of a configurable class if the
+            # `configuration` attribute is not defined or inherited.  In this
+            # case, the class will define `is_configurable`
+            # If the slug is not configurable,
+            super(SlugCommon, self).__init__(config=config)
 
         @property
         def static(self):
@@ -299,7 +311,6 @@ def Slug(**options):
     # ABC Meta class whose metaclass conflicts with the SlugMetaClass.
     class MultipleSlugs(SlugCommon):
         plurality = 'plural'
-        configuration = static_configuration
 
         def __init__(self, *slugs, config=None, static=True):
             # The singular model class needs to be dynamically referenced in the
@@ -365,7 +376,7 @@ def Slug(**options):
                 raise TypeError(
                     f"The slug class {self.__class__} is already dynamic.")
             # The individual children slugs should be static because that check
-            # is performed in the static @property.x
+            # is performed in the static @property.
             return self.__class__(
                 *[slug.to_dynamic(config=config) for slug in self],
                 config=config,
@@ -374,7 +385,6 @@ def Slug(**options):
 
     class SingleSlug(SlugCommon, metaclass=SingleSlugMetaClass):
         plurality = 'single'
-        configuration = static_configuration
 
         def __init__(self, *args, **kwargs):
             super().__init__(**kwargs)
@@ -392,7 +402,6 @@ def Slug(**options):
 
             if not static or slug not in [i.slug for i in cls.instances]:
                 instance = super(SingleSlug, cls).__new__(cls)
-                instance.__init__(*args, **kwargs)
                 setattr(cls, 'instances', cls.instances + [instance])
             else:
                 instance = [i for i in cls.instances if i.slug == slug][0]
@@ -415,13 +424,34 @@ def Slug(**options):
         @classmethod
         def pluck_slug(cls, *args, **kwargs):
             static_slug = getattr(cls, 'slug', None)
-            # We have to avoid cases where the `slug` on the class is an
-            # @property inherited from this base class.  The metaclass prevents
-            # extensions of this class from defining `slug` as an @property.
+            # The `slug` is not allowed to be defined as an @property because
+            # it must be accessible from the class itself.  The metaclass
+            # should prevent this, but we check just to be sure.
             if static_slug is None or isinstance(static_slug, property):
                 # If the model does not define the slug statically, it must be
                 # provided as an argument or keyword argument.
-                return parse_param(cls, 'slug', *args, valid_types=str, **kwargs)
+                if len(args) != 0:
+                    if not isinstance(args[0], str):
+                        raise exceptions.InvalidParamError(
+                            param='slug',
+                            valid_types=(str, ),
+                            value=args[0]
+                        )
+                    elif len(args) != 1:
+                        raise exceptions.ImproperUsageError(
+                            message=f"Expected a single argument, the `slug`, "
+                            f"but received {len(args)} arguments."
+                        )
+                    return args[0]
+                elif 'slug' in kwargs:
+                    if not isinstance(kwargs['slug'], str):
+                        raise exceptions.InvalidParamError(
+                            param='slug',
+                            valid_types=(str, ),
+                            value=kwargs['slug']
+                        )
+                    return kwargs["slug"]
+                raise exceptions.RequiredParamError(param='slug')
             return cls.slug
 
         def to_dynamic(self, config=None):
@@ -468,10 +498,15 @@ def Slug(**options):
         return isinstance(model, singular_model)
 
     if singular_model is not None:
+        singular_model_cls = to_model(singular_model)
+
+        # For each choice, set the choice on the plural form of the class with
+        # the upper case choice name.  Additionally, keep track of all the
+        # choices for the plural form of the class such that the plural form
+        # of the class can be attributed with an __ALL__ property.
         __ALL__ = []
         for k, v in choices.items():
             if isinstance(v, dict):
-                singular_model_cls = to_model(singular_model)
                 v = singular_model_cls(**v)
             elif not is_singular_model(v):
                 raise ValueError(
@@ -490,9 +525,13 @@ def Slug(**options):
 
         setattr(MultipleSlugs, '__ALL__', __ALL__)
 
+        # For each cumulative attribute, set the attribute on the class based
+        # on the upper case attribute name.
         cumulative_attributes = options.pop('cumulative_attributes', {})
         if not isinstance(cumulative_attributes, dict):
             cumulative_attributes = cumulative_attributes(__ALL__)
+        # Each plural slug class should have a `HUMANIZED` attribute which
+        # returns a humanized string of all of the available slug choices.
         cumulative_attributes.update(humanized=utils.humanize_list(
             [m.slug for m in __ALL__],
             conjunction="or"
@@ -500,6 +539,12 @@ def Slug(**options):
         for k, v in cumulative_attributes.items():
             setattr(MultipleSlugs, k.upper(), v)
 
+        # Do not set the configuration on both the plural form and singular form
+        # of the slug classes statically - only one form is returned and one
+        # form is needed, and setting the configuration on both instances will
+        # cause collisions between the :obj:`Config` instances and the class
+        # they are bound to.
+        setattr(MultipleSlugs, 'configuration', configuration)
         return MultipleSlugs
 
     if 'cumulative_attributes' in options:
@@ -507,7 +552,11 @@ def Slug(**options):
             "The cumulative attributes are only applicable for the plural form "
             "of the slug model."
         )
+    # Do not set the configuration on both the plural form and singular form
+    # of the slug classes statically - only one form is returned and one
+    # form is needed, and setting the configuration on both instances will
+    # cause collisions between the :obj:`Config` instances and the class
+    # they are bound to.
+    setattr(SingleSlug, 'configuration', configuration)
     return SingleSlug
 
-
-Slug.Config = Config

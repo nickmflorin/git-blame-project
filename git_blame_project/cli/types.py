@@ -1,13 +1,13 @@
 import pathlib
 import click
 
-from git_blame_project import stdout
+from git_blame_project import utils
 from git_blame_project.blame import Analyses
 from git_blame_project.models import OutputFile, OutputTypes
 
 
 def inconsistent_output_location_warning(output_dir, outputfile):
-    stdout.warning(
+    utils.stdout.warning(
         f"The output directory {str(output_dir)} is inconsistent "
         f"with the location of the provided output file, "
         f"{str(outputfile)}.  Remember, only one of the output "
@@ -168,23 +168,28 @@ class OutputFileType(PathType):
 
 
 class CommaSeparatedListType(click.types.StringParamType):
+    choices = None
+
     def __init__(self, *args, **kwargs):
-        self._choices = kwargs.pop('choices', None)
+        self._choices = kwargs.pop('choices', self.choices)
         self._case_sensitive = kwargs.pop('case_sensitive', False)
+        self._choices_type = click.types.Choice(
+            self._choices,
+            self._case_sensitive
+        )
         super().__init__(*args, **kwargs)
+
+    def convert_value(self, value, param=None, ctx=None):
+        value = value.strip()
+        if self._choices is not None:
+            return self._choices_type.convert(value, param, ctx)
+        return value
 
     def convert(self, value, param, ctx):
         value = super().convert(value, param, ctx)
         results = set([a.strip() for a in value.split(',')])
         if self._choices is not None:
-            validated = []
-            choices_type = click.types.Choice(
-                self._choices,
-                self._case_sensitive
-            )
-            for result in results:
-                validated.append(choices_type.convert(result, param, ctx))
-            return validated
+            return [self.convert_value(v, param, ctx) for v in results]
         return results
 
 
@@ -195,6 +200,10 @@ class MultipleSlugType(CommaSeparatedListType):
             case_sensitive=False
         )
         super().__init__(*args, **kwargs)
+
+    # def convert_value(self, value, **kwargs):
+    #     as_model = kwargs.pop('as_model', False)
+    #     value = super().convert_value(value, **kwargs)
 
     def convert(self, value, param, ctx):
         validated_choices = super().convert(value, param, ctx)
@@ -211,13 +220,6 @@ class AnalysisType(MultipleSlugType):
 
 class OutputTypeType(MultipleSlugType):
     plural_slug_cls = OutputTypes
-
-    def __init__(self, *args, **kwargs):
-        kwargs.update(
-            choices=[ot.slug for ot in OutputTypes.__ALL__],
-            case_sensitive=False
-        )
-        super().__init__(*args, **kwargs)
 
     def convert(self, value, param, ctx):
         output_types = super().convert(value, param, ctx)
