@@ -1,5 +1,7 @@
 import re
 
+from git_blame_project import utils
+
 from .attributes import (
     ParsedAttribute, IntegerParsedAttribute, DateTimeParsedAttribute,
     DependentAttribute, ExistingLineAttribute)
@@ -8,9 +10,24 @@ from .exceptions import BlameLineParserError, BlameLineAttributeParserError
 from .git_env import LocationContextExtensible
 
 
+def get_file_type(v):
+    if v.suffix is None or v.suffix == "":
+        # This can happen if the file is just an extension, like `.gitignore`
+        # or `.npmrc`.
+        if len(v.parts) != 0 and v.parts[-1].startswith('.'):
+            return utils.standardize_extension(v.parts[-1], include_prefix=False)
+    return utils.standardize_extension(v.suffix, include_prefix=False)
+
+
 class BlameLine(LocationContextExtensible):
     attributes = [
         ExistingLineAttribute(name='file_name', title='File Name'),
+        ExistingLineAttribute(
+            attr='repository_file_path',
+            name='file_type',
+            title='File Type',
+            formatter=get_file_type
+        ),
         ExistingLineAttribute(
             attr='repository_file_path',
             name='file_path',

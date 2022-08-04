@@ -24,7 +24,7 @@ class Blame(configurable.Configurable):
             param='ignore_file_types',
             default=utils.standardize_extensions(DEFAULT_IGNORE_FILE_TYPES),
             formatter=lambda v: set(utils.standardize_extensions(
-                v + DEFAULT_IGNORE_FILE_TYPES))
+                list(v) + DEFAULT_IGNORE_FILE_TYPES))
         ),
         configurable.Config(param='file_limit'),
         configurable.Config(

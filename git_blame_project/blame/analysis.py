@@ -8,6 +8,7 @@ from git_blame_project.models import Slug, OutputTypes, OutputType
 
 from .blame_line import BlameLine
 from .git_env import get_git_branch
+from .utils import tabulate_nested_attribute_data
 
 
 def analyses(cls):
@@ -74,18 +75,17 @@ class Analysis(Slug(
         ))
     ]
 )):
-    def count_lines_by_attr(self, attr, formatter=None):
-        count = collections.defaultdict(int)
+    def get_lines(self):
         for file in self.files:
             for line in file.lines:
-                count[getattr(line, attr)] += 1
-        final_data = {}
-        for k, v in count.items():
-            if formatter is not None:
-                final_data[k] = formatter(v)
-            else:
-                final_data[k] = v
-        return final_data
+                yield line
+
+    def count_lines_by_attr(self, *attrs, **kwargs):
+        return utils.count_by_nested_attributes(
+            self.get_lines,
+            *attrs,
+            **kwargs
+        )
 
     @property
     def output_type(self):
@@ -187,7 +187,7 @@ class LineBlameAnalysis(Analysis):
 @analysis(slug='contributions_by_line')
 class ContributionsByLineAnalysis(Analysis):
     def __call__(self):
-        return self.count_lines_by_attr(attr='contributor')
+        return self.count_lines_by_attr('contributor')
 
     def get_tabular_data(self):
         def pct_formatter(v):
@@ -195,10 +195,29 @@ class ContributionsByLineAnalysis(Analysis):
             return "{:.12%}".format((v / num_lines))
 
         return TabularData(
-            header=["Contributor", "Contributions"],
+            header=["Contributor", "Num Lines", "Contributions"],
             rows=[
-                [k, pct_formatter(v)] for k, v in self.result.items()
+                [k, v, pct_formatter(v)] for k, v in self.result.items()
             ]
+        )
+
+
+@analysis(slug='contributions_by_file_type')
+class ContributionsByFileTypeAnalysis(Analysis):
+    def __call__(self):
+        return self.count_lines_by_attr('contributor', 'file_type', 'file_path')
+
+    def get_tabular_data(self):
+        def pct_formatter(v):
+            num_lines = sum(f.num_lines for f in self.files)
+            return "{:.12%}".format((v / num_lines))
+
+        tabulated = tabulate_nested_attribute_data(
+            self.result, formatter=pct_formatter)
+
+        return TabularData(
+            header=["File Type", "Contributor", "Num Lines", "Contributions"],
+            rows=tabulated
         )
 
 
@@ -208,6 +227,7 @@ class Analyses(Slug(
     choices={
         'line_blame': LineBlameAnalysis(),
         'contributions_by_line': ContributionsByLineAnalysis(),
+        'contributions_by_file_type': ContributionsByFileTypeAnalysis(),
     },
     configuration=[
         configurable.Config(
