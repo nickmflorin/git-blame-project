@@ -80,13 +80,6 @@ class Analysis(Slug(
             for line in file.lines:
                 yield line
 
-    def count_lines_by_attr(self, *attrs, **kwargs):
-        return count_by_nested_attributes(
-            self.get_lines,
-            *attrs,
-            **kwargs
-        )
-
     @property
     def output_type(self):
         if self.output_type is not None:
@@ -141,18 +134,11 @@ class Analysis(Slug(
     def output_csv(self):
         output_file = self.output_file_path('csv')
         utils.stdout.info(f"Writing to {str(output_file)}")
-
-        if not hasattr(self, 'get_tabular_data'):
-            raise TypeError(
-                f"The analysis class {self.__class__} does not expose a "
-                "method for retrieving the tabular data."
-            )
-        data = self.get_tabular_data()
         if not self.dry_run:
             with open(str(output_file), 'w') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')
-                writer.writerow(data.header)
-                writer.writerows(data.rows)
+                writer.writerow(self.result.header)
+                writer.writerows(self.result.rows)
 
     def output_excel(self):
         utils.stdout.not_supported(
@@ -170,11 +156,8 @@ class LineBlameAnalysis(Analysis):
     ]
 
     def __call__(self):
-        return self.files
-
-    def get_tabular_data(self):
         rows = []
-        for file in self.result:
+        for file in self.files:
             rows += file.csv_rows(self.columns)
         return TabularData(
             header=[
@@ -196,20 +179,14 @@ class BreakdownAnalysis(Analysis):
     ]
 
     def __call__(self):
-        attributes = [a.name for a in self.attributes]
-        return self.count_lines_by_attr(*attributes)
-
-    def get_tabular_data(self):
         def pct_formatter(v):
             num_lines = sum(f.num_lines for f in self.files)
             return "{:.12%}".format((v / num_lines))
-
-        tabulated = tabulate_nested_attribute_data(
-            self.result, formatter=pct_formatter)
-
-        return TabularData(
-            header=["File Type", "Contributor", "Num Lines", "Contributions"],
-            rows=tabulated
+        return tabulate_nested_attribute_data(
+            self.get_lines,
+            *self.attributes,
+            formatter=pct_formatter,
+            formatted_title='Contributions'
         )
 
 
