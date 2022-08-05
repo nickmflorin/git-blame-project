@@ -1,8 +1,9 @@
 import pathlib
 import click
+from traitlets import validate
 
 from git_blame_project import utils
-from git_blame_project.blame import Analyses
+from git_blame_project.blame import Analyses, BlameLine
 from git_blame_project.models import OutputFile, OutputTypes
 
 
@@ -193,6 +194,19 @@ class CommaSeparatedListType(click.types.StringParamType):
         return results
 
 
+class BreakdownAttributeType(CommaSeparatedListType):
+    def __init__(self, *args, **kwargs):
+        kwargs.update(
+            choices=[attr.name for attr in BlameLine.attributes],
+            case_sensitive=False
+        )
+        super().__init__(*args, **kwargs)
+
+    def convert(self, value, param, ctx):
+        validated_choices = super().convert(value, param, ctx)
+        return [BlameLine.get_attribute(a) for a in validated_choices]
+
+
 class MultipleSlugType(CommaSeparatedListType):
     def __init__(self, *args, **kwargs):
         kwargs.update(
@@ -200,10 +214,6 @@ class MultipleSlugType(CommaSeparatedListType):
             case_sensitive=False
         )
         super().__init__(*args, **kwargs)
-
-    # def convert_value(self, value, **kwargs):
-    #     as_model = kwargs.pop('as_model', False)
-    #     value = super().convert_value(value, **kwargs)
 
     def convert(self, value, param, ctx):
         validated_choices = super().convert(value, param, ctx)

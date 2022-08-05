@@ -17,7 +17,7 @@ flake8 = "^4.0.1"
 autopep8 = "^1.6.0"
 
 [tool.poetry.scripts]
-git-blame-project = "git_blame_project.cli:main"
+git-blame-project = "git_blame_project.cli:cli"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

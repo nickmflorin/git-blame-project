@@ -50,6 +50,11 @@ class BlameLine(LocationContextExtensible):
         ),
         ParsedAttribute('code', 10, title='Code'),
     ]
+    parsed_attributes = [a for a in attributes if isinstance(a, ParsedAttribute)]
+    dependent_attributes = [
+        a for a in attributes
+        if isinstance(a, DependentAttribute)
+    ]
 
     def __init__(self, data, **kwargs):
         super().__init__(**kwargs)
@@ -70,13 +75,15 @@ class BlameLine(LocationContextExtensible):
     def __repr__(self):
         return f"<Line {self.data}>"
 
-    @property
-    def parsed_attributes(self):
-        return [a for a in self.attributes if isinstance(a, ParsedAttribute)]
-
-    @property
-    def dependent_attributes(self):
-        return [a for a in self.attributes if isinstance(a, DependentAttribute)]
+    @classmethod
+    def get_attribute(cls, name):
+        try:
+            return [
+                attr for attr in cls.attributes
+                if attr.name.lower() == name.lower()
+            ][0]
+        except IndexError:
+            raise LookupError(f"No attribute exists with name {name}.")
 
     @property
     def data(self):

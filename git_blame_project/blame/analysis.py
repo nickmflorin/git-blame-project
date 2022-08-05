@@ -1,4 +1,3 @@
-import collections
 import csv
 import pathlib
 import os
@@ -8,7 +7,11 @@ from git_blame_project.models import Slug, OutputTypes, OutputType
 
 from .blame_line import BlameLine
 from .git_env import get_git_branch
-from .utils import tabulate_nested_attribute_data
+from .utils import (
+    TabularData,
+    tabulate_nested_attribute_data,
+    count_by_nested_attributes
+)
 
 
 def analyses(cls):
@@ -54,9 +57,6 @@ def analysis(slug, configuration=None):
     return klass_decorator
 
 
-TabularData = collections.namedtuple('TabularData', ['header', 'rows'])
-
-
 class Analysis(Slug(
     plural_model='git_blame_project.blame.analysis.Analyses',
     configuration=[
@@ -81,7 +81,7 @@ class Analysis(Slug(
                 yield line
 
     def count_lines_by_attr(self, *attrs, **kwargs):
-        return utils.count_by_nested_attributes(
+        return count_by_nested_attributes(
             self.get_lines,
             *attrs,
             **kwargs
@@ -155,7 +155,8 @@ class Analysis(Slug(
                 writer.writerows(data.rows)
 
     def output_excel(self):
-        utils.stdout.not_supported("The `excel` output type is not yet supported.")
+        utils.stdout.not_supported(
+            "The `excel` output type is not yet supported.")
 
 
 @analysis(slug='line_blame')
@@ -184,28 +185,19 @@ class LineBlameAnalysis(Analysis):
         )
 
 
-@analysis(slug='contributions_by_line')
-class ContributionsByLineAnalysis(Analysis):
-    def __call__(self):
-        return self.count_lines_by_attr('contributor')
-
-    def get_tabular_data(self):
-        def pct_formatter(v):
-            num_lines = sum(f.num_lines for f in self.files)
-            return "{:.12%}".format((v / num_lines))
-
-        return TabularData(
-            header=["Contributor", "Num Lines", "Contributions"],
-            rows=[
-                [k, v, pct_formatter(v)] for k, v in self.result.items()
-            ]
+@analysis(slug='breakdown')
+class BreakdownAnalysis(Analysis):
+    configuration = [
+        configurable.Config(
+            param='attributes',
+            accessor='breakdown_attributes',
+            required=True
         )
+    ]
 
-
-@analysis(slug='contributions_by_file_type')
-class ContributionsByFileTypeAnalysis(Analysis):
     def __call__(self):
-        return self.count_lines_by_attr('contributor', 'file_type', 'file_path')
+        attributes = [a.name for a in self.attributes]
+        return self.count_lines_by_attr(*attributes)
 
     def get_tabular_data(self):
         def pct_formatter(v):
@@ -226,12 +218,16 @@ class Analyses(Slug(
     singular_model=Analysis,
     choices={
         'line_blame': LineBlameAnalysis(),
-        'contributions_by_line': ContributionsByLineAnalysis(),
-        'contributions_by_file_type': ContributionsByFileTypeAnalysis(),
+        'breakdown': BreakdownAnalysis(),
     },
     configuration=[
         configurable.Config(
             param='line_blame_columns',
+            required=False,
+            default=[p.name for p in BlameLine.attributes]
+        ),
+        configurable.Config(
+            param='breakdown_attributes',
             required=False,
             default=[p.name for p in BlameLine.attributes]
         ),

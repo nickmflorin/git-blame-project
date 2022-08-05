@@ -20,11 +20,15 @@ class ImmutableSequence(collections.abc.Sequence):
 
 class MutableSequence(collections.abc.MutableSequence):
     def __init__(self, *args):
-        self._store = iterable_from_args(*args)
+        self._store = iterable_from_args(*args, cast=list)
 
     @property
     def data(self):
         return self._store
+
+    def merge(self, *args):
+        data = self._store + iterable_from_args(*args, cast=list)
+        return self.__class__(*data)
 
     def __getitem__(self, i):
         return self._store[i]

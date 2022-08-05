@@ -2,13 +2,11 @@ import sys
 import click
 
 import git_blame_project
-from git_blame_project import utils, configurable, models, exceptions
 from git_blame_project.blame import Analyses, Blame
-from git_blame_project.blame.analysis import LineBlameAnalysis
-from git_blame_project import models
 
-from .options import options
-from .types import RootParamType
+from .help import BreakdownHelpText
+from .options import blame_lines_options, options
+from .types import RootParamType, BreakdownAttributeType
 
 
 def welcome_message():
@@ -21,26 +19,47 @@ def welcome_message():
 
 
 @click.group()
-def cli():
-    pass
+@click.pass_context
+def cli(ctx):
+    welcome_message()
 
 
 @cli.command()
 @click.argument('repository', type=RootParamType(exists=True))
-@options
-def main(repository, **kwargs):
-    welcome_message()
-
-    kwargs.setdefault('analyses', Analyses('line_blame'))
-
-    kwargs['analyses'] = kwargs['analyses'].to_dynamic(config={
+@blame_lines_options
+def blame_lines(repository, **kwargs):
+    kwargs['analyses'] = Analyses('line_blame')
+    kwargs['analyses'].to_dynamic(config={
         'repository': repository,
-        'line_blame_columns': kwargs.pop('line_blame_columns'),
+        'line_blame_columns': kwargs.pop('columns'),
         'output_dir': kwargs.pop('output_dir'),
         'output_file': kwargs.pop('output_file'),
         'output_type': kwargs.pop('output_type'),
         'dry_run': kwargs.pop('dry_run'),
-        'num_analyses': len(kwargs['analyses'])
+        'num_analyses': 1,
+    })
+    blamed = Blame(repository, **kwargs)
+    blamed()
+
+
+@cli.command()
+@click.argument('repository', type=RootParamType(exists=True))
+@click.argument(
+    'attributes',
+    type=BreakdownAttributeType(),
+    # help_text=BreakdownHelpText.ATTRIBUTES,
+)
+@options
+def breakdown(repository, **kwargs):
+    kwargs['analyses'] = Analyses('breakdown')
+    kwargs['analyses'].to_dynamic(config={
+        'repository': repository,
+        'breakdown_attributes': kwargs.pop('attributes'),
+        'output_dir': kwargs.pop('output_dir'),
+        'output_file': kwargs.pop('output_file'),
+        'output_type': kwargs.pop('output_type'),
+        'dry_run': kwargs.pop('dry_run'),
+        'num_analyses': 1,
     })
     blamed = Blame(repository, **kwargs)
     blamed()

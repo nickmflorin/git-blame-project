@@ -7,10 +7,6 @@ class HelpText:
         "If this value is set, the blame will only parse files up until this "
         "number has been reached."
     )
-    LINE_BLAME_COLUMS = (
-        "The columns that should be included in the tabular output of the "
-        "line blame analysis."
-    )
     IGNORE_DIRS = (
         "Directory names that should be ignored if the file is located inside "
         "them.  Can be a single or multiple values.  If a file exists in any "
@@ -46,9 +42,21 @@ class HelpText:
         "output file.  If this cannot be done, the output will only be "
         "displayed via stdout, but will not be saved to a file."
     )
+    # Not currently used.
     ANALYSIS = (
         "The type of analyses that should be performed with the project blame. "
         "Can be a single value or multiple values.  Valid values are "
         f"{Analyses.HUMANIZED}. If omitted, the analyses that will be performed "
         "by default is `line_blame`."
     )
+
+
+class BlameLinesHelpText(HelpText):
+    COLUMNS = (
+        "The columns that should be included in the tabular output of the "
+        "line blame analysis."
+    )
+
+
+class BreakdownHelpText(HelpText):
+    ATTRIBUTES = ""

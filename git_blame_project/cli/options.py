@@ -4,10 +4,10 @@ import click
 from git_blame_project import utils
 from git_blame_project.blame import BlameLine, Analysis
 
-from .help import HelpText
+from .help import HelpText, BlameLinesHelpText, BreakdownHelpText
 from .types import (
     CommaSeparatedListType, OutputFileType, OutputFileDirType, OutputTypeType,
-    AnalysisType, PathType)
+    AnalysisType)
 
 
 class Option:
@@ -24,32 +24,26 @@ class Option:
         )(func)
 
 
-class Options(utils.ImmutableSequence):
+class Options(utils.MutableSequence):
     def __call__(self, func):
         for option in self:
             func = option(func)
         return func
 
+def configure(ctx, param, filename):
+    cfg = ConfigParser()
+    cfg.read(filename)
+    try:
+        opts = dict(cfg['options'])
+    except KeyError:
+        opts = {}
 
-# def configure(ctx, param, filename):
-#     cfg = ConfigParser()
-#     cfg.read(filename)
-#     try:
-#         options = dict(cfg['options'])
-#     except KeyError:
-#         options = {}
-
-#     for k, v in dict(cfg).items():
-#         print(k, v)
-#         if k.startswith('analyses.'):
-#             analysis_type = k.split('analyses.')[1]
-#             obj = Analysis.for_slug(analysis_type)
-
-#             import ipdb; ipdb.set_trace()
-
-
-
-#     ctx.default_map = options
+    for k, v in dict(cfg).items():
+        print(k, v)
+        if k.startswith('analyses.'):
+            analysis_type = k.split('analyses.')[1]
+            Analysis.for_slug(analysis_type)
+    ctx.default_map = opts
 
 
 options = Options(
@@ -78,10 +72,13 @@ options = Options(
         'ignore_file_types',
         type=CommaSeparatedListType(),
         help_text=HelpText.IGNORE_FILE_TYPES
-    ),
+    )
+)
+
+blame_lines_options = options.merge(
     Option(
-        name='line_blame_columns',
-        help_text=HelpText.LINE_BLAME_COLUMS,
+        name='columns',
+        help_text=BlameLinesHelpText.COLUMNS,
         type=CommaSeparatedListType(
             choices=[p.name for p in BlameLine.attributes]
         )
