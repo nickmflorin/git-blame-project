@@ -1,9 +1,8 @@
 import pathlib
 import click
-from traitlets import validate
 
 from git_blame_project import utils
-from git_blame_project.blame import Analyses, BlameLine
+from git_blame_project.blame import BlameLine
 from git_blame_project.models import OutputFile, OutputTypes
 
 
@@ -222,10 +221,6 @@ class MultipleSlugType(CommaSeparatedListType):
     @property
     def plural_slug_cls(self):
         raise NotImplementedError()
-
-
-class AnalysisType(MultipleSlugType):
-    plural_slug_cls = Analyses
 
 
 class OutputTypeType(MultipleSlugType):

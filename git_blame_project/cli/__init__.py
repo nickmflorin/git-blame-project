@@ -4,7 +4,6 @@ import click
 import git_blame_project
 from git_blame_project.blame import Analyses, Blame
 
-from .help import BreakdownHelpText
 from .options import blame_lines_options, options
 from .types import RootParamType, BreakdownAttributeType
 
@@ -47,7 +46,6 @@ def blame_lines(repository, **kwargs):
 @click.argument(
     'attributes',
     type=BreakdownAttributeType(),
-    # help_text=BreakdownHelpText.ATTRIBUTES,
 )
 @options
 def breakdown(repository, **kwargs):

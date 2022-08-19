@@ -9,8 +9,7 @@ from .blame_line import BlameLine
 from .git_env import get_git_branch
 from .utils import (
     TabularData,
-    tabulate_nested_attribute_data,
-    count_by_nested_attributes
+    tabulate_nested_attribute_data
 )
 
 

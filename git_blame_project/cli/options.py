@@ -2,12 +2,12 @@ from configparser import ConfigParser
 import click
 
 from git_blame_project import utils
-from git_blame_project.blame import BlameLine, Analysis
+from git_blame_project.blame import BlameLine
 
-from .help import HelpText, BlameLinesHelpText, BreakdownHelpText
+from .help import HelpText, BlameLinesHelpText
 from .types import (
     CommaSeparatedListType, OutputFileType, OutputFileDirType, OutputTypeType,
-    AnalysisType)
+    PathType)
 
 
 class Option:
@@ -30,6 +30,7 @@ class Options(utils.MutableSequence):
             func = option(func)
         return func
 
+
 def configure(ctx, param, filename):
     cfg = ConfigParser()
     cfg.read(filename)
@@ -37,19 +38,12 @@ def configure(ctx, param, filename):
         opts = dict(cfg['options'])
     except KeyError:
         opts = {}
-
-    for k, v in dict(cfg).items():
-        print(k, v)
-        if k.startswith('analyses.'):
-            analysis_type = k.split('analyses.')[1]
-            Analysis.for_slug(analysis_type)
     ctx.default_map = opts
 
 
 options = Options(
     Option('file_limit', type=int, help_text=HelpText.FILE_LIMIT),
     Option('dry_run', is_flag=True, default=False),
-    Option('analyses', type=AnalysisType(), help_text=HelpText.ANALYSIS),
     Option('output_type', type=OutputTypeType(), help_text=HelpText.OUTPUT_TYPE),
     Option('output_file', type=OutputFileType(), help_text=HelpText.OUTPUT_FILE),
     Option(
@@ -57,12 +51,12 @@ options = Options(
         type=OutputFileDirType(exists=True),
         help_text=HelpText.OUTPUT_DIR
     ),
-    # Option(
-    #     name='config',
-    #     type=PathType(exists=True, dir_okay=False),
-    #     callback=configure,
-    #     help_text=""
-    # ),
+    Option(
+        name='config',
+        type=PathType(exists=True, dir_okay=False),
+        callback=configure,
+        help_text=""
+    ),
     Option(
         name='ignore_dirs',
         type=CommaSeparatedListType(),

@@ -56,7 +56,3 @@ class BlameLinesHelpText(HelpText):
         "The columns that should be included in the tabular output of the "
         "line blame analysis."
     )
-
-
-class BreakdownHelpText(HelpText):
-    ATTRIBUTES = ""
