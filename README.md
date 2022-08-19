@@ -49,8 +49,62 @@ To run [git-blame-project](https://github.com/nickmflorin/git-blame-project),
 simply use the following command:
 
 ```bash
-$ git-blame-project <path_to_my_repository>
+$ git-blame-project <analysis_type> <path_to_my_repository> <analysis_arguments> <options>
 ```
+
+### Analysis Argument
+
+The first argument, `analysis_type`, refers to the specific analysis that the tool will
+perform.  Currently, there are (2) different analyses that can be performed:
+
+1. Line Blame Analysis
+2. Breakdown Analysis
+
+#### Line Blame Analysis
+
+This analysis type analyzes the blame of every line in the project and outputs
+tabular data that shows every single line of code that was analyzed along with
+additional information (that can be configured via the `--columns` option).  This
+additional information is discussed below under the `--columns` option.
+
+To run this analysis, simply run the following command:
+
+```bash
+$ git-blame-project line_blame <path_to_my_repository> <options>
+```
+
+**Note:** There are no additional required arguments for the `line_blame` analysis other
+than the repository path.
+
+#### Breakdown Analysis
+
+This analysis type analyzes the blame of every line in the project but then outputs the
+percentage of lines that fall under each provided attribute.
+
+To run this analysis, simply run the following command:
+
+```bash
+$ git-blame-project breakdown <path_to_my_repository> <attributes> <options>
+```
+
+For example, if we were to run the analysis as follows:
+
+```bash
+$ git-blame-project breakdown <path_to_my_repository> contributor,file_type <options>
+```
+
+The output data would first show the percentage of lines that correspond to each distinct
+contributor to the repository.  Then, for each contributor, it would show the percentage
+of lines of each file type that they contributed.
+
+**Note:** The `attributes` argument is required for the `breakdown` analysis in addition
+to the repository path.
+
+The breakdown can be performed by any number of attributes, as long as those attributes are
+valid.  For more information on what those attribute are, see the discussion under the
+`attributes` argument.
+
+### Repository Path Argument
 
 Currently, the `<path_to_my_repository>` must be the path to the **root** of the
 [Github](https://github.com/) for which you would like to run the tool.  If the
@@ -60,62 +114,25 @@ will be raised.
 
 ### Arguments
 
-There are several arguments which allow you to customize the tool's usage
+There are several options which allow you to customize the tool's usage
 and analysis.
 
-#### `analyses`
+##### `columns` - optional - (Only applicable for `line_blame` analysis)
 
-The `--analyses` argument is used to inform the tool what analyses you would
-like to perform.  The `--analyses` argument can be provided as a single value or
-multiple values, but all value(s) must refer to the slug of an implemented
-analysis type.
-
-Multiple values are provided as a string of comma separated values:
-
-```bash
-$ git-blame-project <path_to_my_repository> --analyses=line_blame,contributions_by_line
-```
-
-**Valid Values**: line_blame, contributions_by_line
-**Default Value**: `line_blame`
-
-Currently, there are (2) analysis types: `line_blame` and `contributions_by_line`.
-
-##### `line_blame` Analysis
-
-This analysis type analyzes the blame of every line in the project and outputs
-tabular data that optionally shows the contributor of every line, the commit
-number, the date and time at which the commit happened, the line of code itself
-and the line number of the line in the file.
-
-If this analysis type is included in the `--analysis` argument, there are
-additional arguments that apply to this analysis that are outlined below:
-
-##### `line_blame_columns`
-
-The `--line_blame_columns` argument defines what columns should be used to
-display the tabular data in the output of this analysis.  The
-`--line_blame_columns` argument can be provided as a single value or multiple
+This option defines what columns should be used to display the tabular data in the output of
+this analysis.  The `--columns` option can be provided as a single value or multiple
 values, but all value(s) must refer to a valid column.
 
 Multiple values are provided as a string of comma separated values:
 
 ```bash
-$ git-blame-project <path_to_my_repository> --line_blame_columns=code,datetime
+$ git-blame-project line_blame <path_to_my_repository> --columns=code,datetime
 ```
 
 **Valid Values**: code, datetime, contributor, line_no, commit, file_name, file_path
 **Default Value**: `file_name,file_path,code,datetime,contributor,line_no,commit`
 
-##### `contributions_by_line` Analysis
-
-This analysis type analyzes the relative contributions of each contributor that
-is present in the files being analyzed and outputs tabular data that shows
-the relative contributions of each contributor as a percentage.  The number of
-lines each contributor is responsible for relative to the total number of lines
-for all the files being analyzed.
-
-#### `output_type`
+#### `output_type` - optional
 
 The `--output_type` argument is used to inform the tool how the results for
 each analysis should be outputted.  The `--output_type` argument can be provided
@@ -125,7 +142,7 @@ as a single value or multiple values, but all value(s) must refer to a valid
 Multiple values are provided as a string of comma separated values:
 
 ```bash
-$ git-blame-project <path_to_my_repository> --output_type=csv,excel
+$ git-blame-project line_blame <path_to_my_repository> --output_type=csv,excel
 ```
 
 **Valid Values**: csv, excel
@@ -138,7 +155,7 @@ If the `output_type` is not provided, it will be inferred from the provided
 `--output_file` argument was not provided or it does not have an extension,
 the default value will be used.
 
-#### `output_file`
+#### `output_file` - optional
 
 The `--output_file` argument informs the tool where the output data from the
 analysis should be saved.  It can be provided in the following forms:
@@ -165,7 +182,7 @@ For example, the following would result in a warning being issued but an
 output file saved at `/users/john/data/file.csv`:
 
 ```bash
-$ git-blame-project <path_to_my_repository> --output_file=/users/john/data/file.xlsx --output_type=csv
+$ git-blame-project line_blame <path_to_my_repository> --output_file=/users/john/data/file.xlsx --output_type=csv
 ```
 
 If multiple values are specified for the `--output_type` but only one extension
@@ -176,7 +193,7 @@ For example, the following would result in a warning being issued but
 output files saved at `/users/john/data/file.csv` and `/users/john/data/file.xlsx`:
 
 ```bash
-$ git-blame-project <path_to_my_repository> --output_file=/users/john/data/file.xlsx --output_type=csv,excel
+$ git-blame-project line_blame <path_to_my_repository> --output_file=/users/john/data/file.xlsx --output_type=csv,excel
 ```
 
 If the extension is not provided, it will be inferred based on the `--output_type`
