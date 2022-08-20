@@ -11,8 +11,8 @@ from .blame_file import BlameFile
 from .blame_line import BlameLine
 from .constants import DEFAULT_IGNORE_DIRECTORIES, DEFAULT_IGNORE_FILE_TYPES
 from .exceptions import BlameFileParserError
-from .git_env import repository_directory_context, LocationContext
-from .git_env import get_git_branch
+from .git_env import (
+    repository_directory_context, LocationContext, get_git_branch)
 from .utils import (
     TabularData,
     tabulate_nested_attribute_data
