@@ -1,11 +1,17 @@
 import csv
-import pathlib
 import os
+import pathlib
+
+import click
 
 from git_blame_project import utils, configurable
-from git_blame_project.models import Slug, OutputTypes, OutputType
+from git_blame_project.models import OutputTypes, OutputType
 
+from .blame_file import BlameFile
 from .blame_line import BlameLine
+from .constants import DEFAULT_IGNORE_DIRECTORIES, DEFAULT_IGNORE_FILE_TYPES
+from .exceptions import BlameFileParserError
+from .git_env import repository_directory_context, LocationContext
 from .git_env import get_git_branch
 from .utils import (
     TabularData,
@@ -13,20 +19,46 @@ from .utils import (
 )
 
 
-def analyses(cls):
-    if not hasattr(cls, '__call__'):
-        raise TypeError(
-            f"The analysis class {cls.__name__} must be callable."
-        )
-    original_call = getattr(cls, '__call__')
+__all__ = ('LineBlameAnalysis', 'BreakdownAnalysis')
 
-    def __call__(instance, files):
-        setattr(instance, '_files', files)
-        if hasattr(instance, '_result'):
-            delattr(instance, '_result')
-        result = original_call(instance)
-        setattr(instance, '_result', result)
-        return result
+
+class Analysis(configurable.Configurable):
+    configure_on_init = True
+    configuration = [
+        configurable.Config(
+            param='ignore_dirs',
+            default=list(set(DEFAULT_IGNORE_DIRECTORIES)),
+            formatter=lambda v: set(list(v) + DEFAULT_IGNORE_DIRECTORIES)
+        ),
+        configurable.Config(
+            param='ignore_file_types',
+            default=utils.standardize_extensions(DEFAULT_IGNORE_FILE_TYPES),
+            formatter=lambda v: set(utils.standardize_extensions(
+                list(v) + DEFAULT_IGNORE_FILE_TYPES))
+        ),
+        configurable.Config(param='file_limit'),
+        configurable.Config(param='dry_run', default=False),
+        configurable.Config(
+            param='repository',
+            required=True,
+            formatter=utils.path_formatter()
+        ),
+        configurable.Config(param='output_file', required=False),
+        configurable.Config(param='output_type', required=False),
+        configurable.Config(param='output_dir', default=utils.LazyFn(
+            func=pathlib.Path,
+            args=[os.getcwd]
+        ))
+    ]
+
+    def __call__(self):
+        # We must physically move to the directory that the repository is
+        # located in such that we can access the `git` command line tools.
+        with repository_directory_context(self.repository):
+            self._files = self.perform_blame()
+        self._result = self.get_result()
+        if self.should_output:
+            self.output()
 
     @property
     def result(self):
@@ -40,44 +72,110 @@ def analyses(cls):
             raise Exception("The analysis has not yet been performed.")
         return self._files
 
-    setattr(cls, '__call__', __call__)
-    setattr(cls, 'result', result)
-    setattr(cls, 'files', files)
-    return cls
+    @property
+    def should_output(self):
+        return self.output_dir is not None \
+            or self.output_file is not None \
+            or self.output_type is not None
 
+    def perform_blame(self):
+        blame_files = []
 
-def analysis(slug, configuration=None):
-    def klass_decorator(cls):
-        cls = analyses(cls)
-        setattr(cls, 'slug', slug)
-        if configuration is not None:
-            setattr(cls, 'configuration', configuration)
-        return cls
-    return klass_decorator
+        utils.stdout.info("Filtering out files that should be ignored.")
+        flattened_files = []
 
+        utils.stdout.info("Collecting Files in the Repository")
+        flattened_files = []
+        for path, _, files in os.walk(self.repository):
+            file_dir = pathlib.Path(path)
+            for file_name in files:
+                flattened_files.append((file_dir, file_name))
 
-class Analysis(Slug(
-    plural_model='git_blame_project.blame.analysis.Analyses',
-    configuration=[
-        configurable.Config(param='dry_run', default=False),
-        configurable.Config(
-            param='repository',
-            required=True,
-            formatter=utils.path_formatter()
-        ),
-        configurable.Config(param='num_analyses', required=True),
-        configurable.Config(param='output_file', required=False),
-        configurable.Config(param='output_type', required=False),
-        configurable.Config(param='output_dir', default=utils.LazyFn(
-            func=pathlib.Path,
-            args=[os.getcwd]
-        ))
-    ]
-)):
+        limit = len(flattened_files)
+        if self.file_limit is not None:
+            limit = min(self.file_limit, limit)
+
+        filtered_files = []
+
+        with click.progressbar(
+            length=limit,
+            label=utils.stdout.info('Filtering Files', display=False),
+            color='blue'
+        ) as progress_bar:
+            for file_dir, file_name in flattened_files:
+                file_path = file_dir / file_name
+                # This seems to be happening occasionally with paths that are
+                # in directories that typically should be ignored (like .git).
+                if file_name == "None":
+                    if self.file_limit is None:
+                        # If there is a file limit, we only want to update the
+                        # progress bar when we encounter a valid file.
+                        progress_bar.update(1)
+                    continue
+
+                elif any([p in self.ignore_dirs for p in file_dir.parts]):
+                    if self.file_limit is None:
+                        # If there is a file limit, we only want to update the
+                        # progress bar when we encounter a valid file.
+                        progress_bar.update(1)
+                    continue
+
+                elif file_path.suffix.lower() in self.ignore_file_types:
+                    if self.file_limit is None:
+                        # If there is a file limit, we only want to update the
+                        # progress bar when we encounter a valid file.
+                        progress_bar.update(1)
+                    continue
+
+                filtered_files.append((file_dir, file_name))
+                progress_bar.update(1)
+                if self.file_limit is not None \
+                        and len(filtered_files) == self.file_limit:
+                    break
+
+        file_errors = []
+        errors = []
+        with click.progressbar(
+            filtered_files,
+            label=utils.stdout.info(
+                'Performing Blame on Each File', display=False),
+            length=len(filtered_files)
+        ) as progress_bar:
+            for file_dir, file_name in progress_bar:
+                repository_path = file_dir.relative_to(self.repository)
+                context = LocationContext(
+                    repository=self.repository,
+                    repository_path=repository_path,
+                    file_name=file_name
+                )
+                blamed_file = BlameFile.create(context)
+                if isinstance(blamed_file, BlameFileParserError):
+                    if not blamed_file.silent:
+                        file_errors.append(blamed_file)
+                else:
+                    if blamed_file.errors:
+                        errors += blamed_file.errors
+                    blame_files.append(blamed_file)
+
+        if file_errors:
+            utils.stdout.warning(
+                f"There were {len(file_errors)} files that could not be parsed:")
+            for error in file_errors:
+                utils.stdout.warning(error.message)
+        if errors:
+            utils.stdout.warning(
+                f"There were {len(errors)} lines that could not be parsed:")
+            for error in errors:
+                utils.stdout.warning(error.message)
+        return blame_files
+
     def get_lines(self):
         for file in self.files:
             for line in file.lines:
                 yield line
+
+    def get_result(self):
+        raise NotImplementedError()
 
     @property
     def output_type(self):
@@ -113,16 +211,16 @@ class Analysis(Slug(
             .format_filename(self.default_output_file_name(suffix=suffix))
 
     def output_file_path(self, output_type):
-        # The output file is guaranteed to be an existing directory or a file
-        # that may or may not exist, but in a parent directory that does exist.
+        # This used to be used when running multiple analyses from the same
+        # command, but is not used anymore.
         suffix = None
+        if getattr(self, 'output_file_suffix', None):
+            suffix = self.output_file_suffix
 
         self.default_output_file_name('csv')
-        if self.num_analyses > 1:
-            if getattr(self, 'output_file_suffix', None):
-                suffix = self.output_file_suffix
-            else:
-                suffix = self.slug
+
+        # The output file is guaranteed to be an existing directory or a file
+        # that may or may not exist, but in a parent directory that does exist.
         if self.output_file is not None:
             return self.output_file.filepath(output_type, suffix=suffix)
         return self.output_dir / self.default_output_file_path(
@@ -144,17 +242,15 @@ class Analysis(Slug(
             "The `excel` output type is not yet supported.")
 
 
-@analysis(slug='line_blame')
 class LineBlameAnalysis(Analysis):
     configuration = [
         configurable.Config(
             param='columns',
-            accessor='line_blame_columns',
             default=[p.name for p in BlameLine.attributes]
         )
     ]
 
-    def __call__(self):
+    def get_result(self):
         rows = []
         for file in self.files:
             rows += file.csv_rows(self.columns)
@@ -167,17 +263,12 @@ class LineBlameAnalysis(Analysis):
         )
 
 
-@analysis(slug='breakdown')
 class BreakdownAnalysis(Analysis):
     configuration = [
-        configurable.Config(
-            param='attributes',
-            accessor='breakdown_attributes',
-            required=True
-        )
+        configurable.Config(param='attributes', required=True)
     ]
 
-    def __call__(self):
+    def get_result(self):
         def pct_formatter(v):
             num_lines = sum(f.num_lines for f in self.files)
             return "{:.12%}".format((v / num_lines))
@@ -187,45 +278,3 @@ class BreakdownAnalysis(Analysis):
             formatter=pct_formatter,
             formatted_title='Contributions'
         )
-
-
-@analyses
-class Analyses(Slug(
-    singular_model=Analysis,
-    choices={
-        'line_blame': LineBlameAnalysis(),
-        'breakdown': BreakdownAnalysis(),
-    },
-    configuration=[
-        configurable.Config(
-            param='line_blame_columns',
-            required=False,
-            default=[p.name for p in BlameLine.attributes]
-        ),
-        configurable.Config(
-            param='breakdown_attributes',
-            required=False,
-            default=[p.name for p in BlameLine.attributes]
-        ),
-        configurable.Config(param='output_file', required=False),
-        configurable.Config(param='output_dir', default=utils.LazyFn(
-            func=pathlib.Path,
-            args=[os.getcwd]
-        ))
-    ]
-)):
-    def __call__(self):
-        for a in self:
-            a(self.files)
-        if self.should_output:
-            self.output()
-
-    @property
-    def should_output(self):
-        return self.output_dir is not None \
-            or self.output_file is not None \
-            or self.output_type is not None
-
-    def output(self):
-        for a in self:
-            a.output()

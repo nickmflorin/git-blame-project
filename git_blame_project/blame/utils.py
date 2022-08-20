@@ -123,9 +123,7 @@ def tabulate_nested_attribute_data(data, *attrs, formatter=None,
     if formatter is not None:
         header += [formatted_title]
 
-    print(attribute_data.data)
     rows = get_rows(data=attribute_data.data)
-    print(rows)
     return TabularData(
         header=header,
         rows=rows

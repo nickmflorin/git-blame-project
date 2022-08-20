@@ -1,4 +1,3 @@
-from git_blame_project.blame import Analyses
 from git_blame_project.models import OutputTypes
 
 
@@ -41,13 +40,6 @@ class HelpText:
         "If omitted, the output type will be inferred from the provided "
         "output file.  If this cannot be done, the output will only be "
         "displayed via stdout, but will not be saved to a file."
-    )
-    # Not currently used.
-    ANALYSIS = (
-        "The type of analyses that should be performed with the project blame. "
-        "Can be a single value or multiple values.  Valid values are "
-        f"{Analyses.HUMANIZED}. If omitted, the analyses that will be performed "
-        "by default is `line_blame`."
     )
 
 
