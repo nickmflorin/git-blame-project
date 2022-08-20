@@ -37,7 +37,7 @@ def blame_lines(repository, **kwargs):
         'dry_run': kwargs.pop('dry_run'),
         'num_analyses': 1,
     })
-    blamed = Blame(repository, **kwargs)
+    blamed = Blame(repository, config=kwargs)
     blamed()
 
 
@@ -59,5 +59,5 @@ def breakdown(repository, **kwargs):
         'dry_run': kwargs.pop('dry_run'),
         'num_analyses': 1,
     })
-    blamed = Blame(repository, **kwargs)
+    blamed = Blame(repository, config=kwargs)
     blamed()

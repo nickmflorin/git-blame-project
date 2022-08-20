@@ -26,36 +26,7 @@ class ImproperUsageError(GitBlameProjectError):
     This exception class, and extensions of this extension class, can
     optionally include context about the class or the function that is being
     improperly used.
-
-    Parameters:
-    -----------
-    Like all attributes of the :obj:`AbstractException` class and its
-    extensions, each attribute can be provided on initialization, defined
-    statically on the class as a simple attribute or defined statically
-    on the class as an @property.
-
-    In all cases, the :obj:`ExceptionMetaClass` will be used to wrap the
-    attribute in an @property to ensure it is retrieved from the correct
-    source (initialization arguments or static class attributes) and
-    formatted when accessed.
-
-    klass: :obj:`str`, :obj:`type` or :obj:`object` (optional)
-        The class or instance that the improper usage is related to - if
-        applicable.  Can be provided as a string name of the class, the
-        class itself or an instance of the class.
-
-        Default: None
-
-    func: :obj:`str` or :obj:`lambda` (optional)
-        The function name or function itself that the improper usage is
-        related to - if applicable.
-
-        Default: None
     """
-    attributes = [
-        ExceptionAttribute(name='klass', formatter=utils.obj_name),
-        ExceptionAttribute(name='func', formatter=utils.obj_name)
-    ]
     prefix = [
         StringFormatChoices(
             func=lambda instance: instance.klass is not None

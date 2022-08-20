@@ -37,6 +37,7 @@ ensure_unconfigured = exceptions.check_instance(
     ]
 )
 
+
 def exception_kwargs(instance):
     from .config import Config
     if isinstance(instance, Config):

@@ -24,14 +24,20 @@ static_map = {
 }
 
 
-# ensure_static = exceptions.check_instance(
-#     exc_cls=ConfigNotBoundError,
-#     exc_kwargs=lambda instance: {"param": instance.slug},
-#     exc_message=f"{"
-#     criteria=[
-#         exceptions.Criteria(attr='is_static')
-#     ]
-# )
+class SlugNotStaticError(exceptions.GitBlameProjectError):
+    required_on_init = ['klass']
+    content = [
+        "The {klass} is not static."
+    ]
+
+
+ensure_static = exceptions.check_instance(
+    exc_cls=SlugNotStaticError,
+    exc_kwargs=lambda instance: {"klass": instance},
+    criteria=[
+        exceptions.Criteria(attr='static')
+    ]
+)
 
 
 def is_static(instance_or_cls, static=utils.empty, dynamic=utils.empty):
@@ -365,6 +371,7 @@ def Slug(**options):
         def all(cls):
             return cls(cls.__ALL__, static=True)
 
+        @ensure_static
         def to_dynamic(self, config=None):
             """
             Returns a new dynamic instance of the :obj:`MultipleSlugs` with the
@@ -372,9 +379,6 @@ def Slug(**options):
             :obj:`SingleSlug` that the instance contains are also converted
             to dynamic instances with the configurations applied.
             """
-            if self.dynamic is True:
-                raise TypeError(
-                    f"The slug class {self.__class__} is already dynamic.")
             # The individual children slugs should be static because that check
             # is performed in the static @property.
             return self.__class__(
@@ -454,6 +458,7 @@ def Slug(**options):
                 raise exceptions.RequiredParamError(param='slug')
             return cls.slug
 
+        @ensure_static
         def to_dynamic(self, config=None):
             """
             Returns a new dynamic instance of the :obj:`SingleSlug` with the
@@ -559,4 +564,3 @@ def Slug(**options):
     # they are bound to.
     setattr(SingleSlug, 'configuration', configuration)
     return SingleSlug
-

@@ -91,6 +91,19 @@ class AbstractException(Exception, metaclass=ExceptionMetaClass):
 
         Default: None
 
+    klass: :obj:`str`, :obj:`type` or :obj:`object` (optional)
+        The class or instance that the error is related to - if applicable.
+        Can be provided as a string name of the class, the class itself or an
+        instance of the class.
+
+        Default: None
+
+    func: :obj:`str` or :obj:`lambda` (optional)
+        The function name or function itself that the error may be related to,
+        if applicable.
+
+        Default: None
+
     indent: :obj:`str` (optional)
         A :obj:`str` that will be displayed in front of the combined message
         `content` and `prefix`.  This will typically be an empty string.
@@ -138,6 +151,8 @@ class AbstractException(Exception, metaclass=ExceptionMetaClass):
     """
     attributes = [
         ExceptionAttribute(name='detail', formatter=utils.ensure_iterable),
+        ExceptionAttribute(name='klass', formatter=utils.obj_name),
+        ExceptionAttribute(name='func', formatter=utils.obj_name),
         ExceptionAttribute(
             name='detail_indent',
             formatter=utils.ensure_iterable

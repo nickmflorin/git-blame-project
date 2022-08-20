@@ -32,13 +32,14 @@ class Options(utils.MutableSequence):
 
 
 def configure(ctx, param, filename):
-    cfg = ConfigParser()
-    cfg.read(filename)
-    try:
-        opts = dict(cfg['options'])
-    except KeyError:
-        opts = {}
-    ctx.default_map = opts
+    if filename is not None:
+        cfg = ConfigParser()
+        cfg.read(filename)
+        try:
+            opts = dict(cfg['options'])
+        except KeyError:
+            opts = {}
+        ctx.default_map = opts
 
 
 options = Options(

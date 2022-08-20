@@ -204,7 +204,7 @@ class ConfigurableMetaClass(type):
                 continue
             # If the base class defines a configuration but it is invalid, do
             # not raise an exception - simply ignore it.
-            elif not is_valid_configuration(configuration):
+            if not is_valid_configuration(configuration):
                 continue
             # This should not raise an exception as we only call this method
             # if the configuration is valid.  The configuration  is not
