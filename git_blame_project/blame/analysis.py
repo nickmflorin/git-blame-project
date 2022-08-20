@@ -113,14 +113,14 @@ class Analysis(configurable.Configurable):
                         progress_bar.update(1)
                     continue
 
-                elif any([p in self.ignore_dirs for p in file_dir.parts]):
+                if any([p in self.ignore_dirs for p in file_dir.parts]):
                     if self.file_limit is None:
                         # If there is a file limit, we only want to update the
                         # progress bar when we encounter a valid file.
                         progress_bar.update(1)
                     continue
 
-                elif file_path.suffix.lower() in self.ignore_file_types:
+                if file_path.suffix.lower() in self.ignore_file_types:
                     if self.file_limit is None:
                         # If there is a file limit, we only want to update the
                         # progress bar when we encounter a valid file.

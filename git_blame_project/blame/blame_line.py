@@ -82,8 +82,10 @@ class BlameLine(LocationContextExtensible):
                 attr for attr in cls.attributes
                 if attr.name.lower() == name.lower()
             ][0]
-        except IndexError:
-            raise LookupError(f"No attribute exists with name {name}.")
+        except IndexError as e:
+            raise LookupError(
+                f"No attribute exists with name {name}."
+            ) from e
 
     @property
     def data(self):
