@@ -79,11 +79,6 @@ class Analysis(configurable.Configurable):
             or self.output_type is not None
 
     def perform_blame(self):
-        blame_files = []
-
-        utils.stdout.info("Filtering out files that should be ignored.")
-        flattened_files = []
-
         utils.stdout.info("Collecting Files in the Repository")
         flattened_files = []
         for path, _, files in os.walk(self.repository):
@@ -135,6 +130,8 @@ class Analysis(configurable.Configurable):
 
         file_errors = []
         errors = []
+        blame_files = []
+
         with click.progressbar(
             filtered_files,
             label=utils.stdout.info(
