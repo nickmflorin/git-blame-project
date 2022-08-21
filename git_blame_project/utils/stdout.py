@@ -1,4 +1,8 @@
 import copy
+import sys
+import time
+import threading
+
 import click
 
 from .builtins import ensure_iterable, empty
@@ -183,3 +187,41 @@ class stdout:
     error = MessageFn(level="error", prefix="Error")
     # TODO: We need to implement a logging system.
     log = warning
+
+
+class Spinner:
+    busy = False
+    cursor_chars = '|/-\\'
+
+    def __init__(self, delay=None, label=None):
+        self._label = label
+        self._spinner_generator = self.spinning_cursor()
+        if delay and float(delay):
+            self._delay = delay
+        else:
+            self._delay = 0.05
+
+    def __enter__(self):
+        self.busy = True
+        if self._label is not None:
+            sys.stdout.write(f"{self._label} ")
+        threading.Thread(target=self.spinner_task).start()
+
+    def __exit__(self, *exc_args):
+        self.busy = False
+        time.sleep(self._delay)
+        return False
+
+    @classmethod
+    def spinning_cursor(cls):
+        while True:
+            for cursor in cls.cursor_chars:
+                yield cursor
+
+    def spinner_task(self):
+        while self.busy:
+            sys.stdout.write(next(self._spinner_generator))
+            sys.stdout.flush()
+            time.sleep(self._delay)
+            sys.stdout.write('\b')
+            sys.stdout.flush()

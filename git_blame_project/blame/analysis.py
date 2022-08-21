@@ -1,8 +1,7 @@
+import collections
 import csv
 import os
 import pathlib
-
-import click
 
 from git_blame_project import utils, configurable
 from git_blame_project.models import OutputTypes, OutputType
@@ -13,13 +12,12 @@ from .constants import DEFAULT_IGNORE_DIRECTORIES, DEFAULT_IGNORE_FILE_TYPES
 from .exceptions import BlameFileParserError
 from .git_env import (
     repository_directory_context, LocationContext, get_git_branch)
-from .utils import (
-    TabularData,
-    tabulate_nested_attribute_data
-)
 
 
 __all__ = ('LineBlameAnalysis', 'BreakdownAnalysis')
+
+
+TabularData = collections.namedtuple('TabularData', ['header', 'rows'])
 
 
 class Analysis(configurable.Configurable):
@@ -51,26 +49,30 @@ class Analysis(configurable.Configurable):
         ))
     ]
 
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self._file_count = 0
+    #     self._line_count = 0
+
     def __call__(self):
         # We must physically move to the directory that the repository is
         # located in such that we can access the `git` command line tools.
         with repository_directory_context(self.repository):
-            self._files = self.perform_blame()
-        self._result = self.get_result()
+            result = self.get_result()
         if self.should_output:
-            self.output()
+            self.output(result)
 
-    @property
-    def result(self):
-        if not getattr(self, '_result', None):
-            raise Exception("The analysis has not yet been performed.")
-        return self._result
+    # @property
+    # def result(self):
+    #     if not getattr(self, '_result', None):
+    #         raise Exception("The analysis has not yet been performed.")
+    #     return self._result
 
-    @property
-    def files(self):
-        if not getattr(self, '_files', None):
-            raise Exception("The analysis has not yet been performed.")
-        return self._files
+    # @property
+    # def files(self):
+    #     if not getattr(self, '_files', None):
+    #         raise Exception("The analysis has not yet been performed.")
+    #     return self._files
 
     @property
     def should_output(self):
@@ -78,67 +80,35 @@ class Analysis(configurable.Configurable):
             or self.output_file is not None \
             or self.output_type is not None
 
-    def perform_blame(self):
-        utils.stdout.info("Collecting Files in the Repository")
-        flattened_files = []
+    def get_files(self):
+        count = 0
         for path, _, files in os.walk(self.repository):
             file_dir = pathlib.Path(path)
             for file_name in files:
-                flattened_files.append((file_dir, file_name))
-
-        limit = len(flattened_files)
-        if self.file_limit is not None:
-            limit = min(self.file_limit, limit)
-
-        filtered_files = []
-
-        with click.progressbar(
-            length=limit,
-            label=utils.stdout.info('Filtering Files', display=False),
-            color='blue'
-        ) as progress_bar:
-            for file_dir, file_name in flattened_files:
                 file_path = file_dir / file_name
                 # This seems to be happening occasionally with paths that are
                 # in directories that typically should be ignored (like .git).
                 if file_name == "None":
-                    if self.file_limit is None:
-                        # If there is a file limit, we only want to update the
-                        # progress bar when we encounter a valid file.
-                        progress_bar.update(1)
                     continue
-
                 if any([p in self.ignore_dirs for p in file_dir.parts]):
-                    if self.file_limit is None:
-                        # If there is a file limit, we only want to update the
-                        # progress bar when we encounter a valid file.
-                        progress_bar.update(1)
                     continue
-
                 if file_path.suffix.lower() in self.ignore_file_types:
-                    if self.file_limit is None:
-                        # If there is a file limit, we only want to update the
-                        # progress bar when we encounter a valid file.
-                        progress_bar.update(1)
                     continue
 
-                filtered_files.append((file_dir, file_name))
-                progress_bar.update(1)
-                if self.file_limit is not None \
-                        and len(filtered_files) == self.file_limit:
-                    break
+                yield (file_dir, file_name)
 
+                if self.file_limit is not None and count == self.file_limit:
+                    return
+                count += 1
+
+    def generate_files(self):
         file_errors = []
         errors = []
         blame_files = []
 
-        with click.progressbar(
-            filtered_files,
-            label=utils.stdout.info(
-                'Performing Blame on Each File', display=False),
-            length=len(filtered_files)
-        ) as progress_bar:
-            for file_dir, file_name in progress_bar:
+        with utils.Spinner(
+                label=utils.stdout.info('Analyzing Files', display=False)):
+            for file_dir, file_name in self.get_files():
                 repository_path = file_dir.relative_to(self.repository)
                 context = LocationContext(
                     repository=self.repository,
@@ -152,7 +122,7 @@ class Analysis(configurable.Configurable):
                 else:
                     if blamed_file.errors:
                         errors += blamed_file.errors
-                    blame_files.append(blamed_file)
+                    yield blamed_file
 
         if file_errors:
             utils.stdout.warning(
@@ -166,8 +136,8 @@ class Analysis(configurable.Configurable):
                 utils.stdout.warning(error.message)
         return blame_files
 
-    def get_lines(self):
-        for file in self.files:
+    def generate_lines(self):
+        for file in self.generate_files():
             for line in file.lines:
                 yield line
 
@@ -184,13 +154,13 @@ class Analysis(configurable.Configurable):
         # where we do not output?
         return OutputTypes.all()
 
-    def output(self):
+    def output(self, result):
         output_mapping = {
             OutputTypes.CSV.slug: self.output_csv,
             OutputTypes.EXCEL.slug: self.output_excel,
         }
         for output_type in self.output_type:
-            output_mapping[output_type.slug]()
+            output_mapping[output_type.slug](result)
 
     def default_output_file_name(self, suffix=None):
         branch_name = get_git_branch(self.repository)
@@ -225,16 +195,16 @@ class Analysis(configurable.Configurable):
             suffix=suffix
         )
 
-    def output_csv(self):
+    def output_csv(self, result):
         output_file = self.output_file_path('csv')
         utils.stdout.info(f"Writing to {str(output_file)}")
         if not self.dry_run:
             with open(str(output_file), 'w') as csvfile:
                 writer = csv.writer(csvfile, delimiter=',')
-                writer.writerow(self.result.header)
-                writer.writerows(self.result.rows)
+                writer.writerow(result.header)
+                writer.writerows(result.rows)
 
-    def output_excel(self):
+    def output_excel(self, result):
         utils.stdout.not_supported(
             "The `excel` output type is not yet supported.")
 
@@ -249,7 +219,7 @@ class LineBlameAnalysis(Analysis):
 
     def get_result(self):
         rows = []
-        for file in self.files:
+        for file in self.generate_files():
             rows += file.csv_rows(self.columns)
         return TabularData(
             header=[
@@ -265,13 +235,74 @@ class BreakdownAnalysis(Analysis):
         configurable.Config(param='attributes', required=True)
     ]
 
+    def _perform_count(self, line, current, *attributes):
+        attr_value = getattr(line, attributes[0].name)
+        current.setdefault(attr_value, {'count': 0, 'children': {}})
+        current[attr_value]['count'] += 1
+        if len(attributes) > 1:
+            self._perform_count(
+                line,
+                current[attr_value]['children'],
+                *attributes[1:],
+            )
+
     def get_result(self):
+        count = {}
+        num_lines = 0
+        for line in self.generate_lines():
+            self._perform_count(line, count, *self.attributes)
+            num_lines += 1
+
         def pct_formatter(v):
-            num_lines = sum(f.num_lines for f in self.files)
-            return "{:.12%}".format((v / num_lines))
-        return tabulate_nested_attribute_data(
-            self.get_lines,
-            *self.attributes,
+            if num_lines != 0:
+                return "{:.12%}".format((v / num_lines))
+            # This should not happen because it would imply there were no lines
+            # for the given attribute, but just in case we implement this check.
+            return "{:.12%}".format(0.0)
+
+        return self.tabulate_nested_attribute_data(
+            count,
             formatter=pct_formatter,
             formatted_title='Contributions'
+        )
+
+    def tabulate_nested_attribute_data(self, data, formatter=None,
+            formatted_title="Formatted"):
+        def get_row(value, attribute_count, level_number=0):
+            row = []
+            assert level_number <= len(self.attributes), \
+                f"The current level number {level_number} should always be " \
+                f"less than the number of attributes, {len(self.attributes)}."
+            # Add the cells at the beginning of the row that display the
+            # attribute at the current nested level.
+            for i in range(len(self.attributes)):
+                if level_number == i:
+                    row.append(value)
+                else:
+                    row.append("")
+            if formatter is not None:
+                return row + [
+                    attribute_count['count'],
+                    formatter(attribute_count['count'])
+                ]
+            return row + [attribute_count['count']]
+
+        def get_rows(data, level_number=0):
+            rows = []
+            for k, v in data.items():
+                rows.append(get_row(k, v, level_number=level_number))
+                if len(v['children']) != 0:
+                    rows += get_rows(
+                        data=v['children'],
+                        level_number=level_number + 1
+                    )
+            return rows
+
+        header = [attr.title for attr in self.attributes] + ["Num Lines"]
+        if formatter is not None:
+            header += [formatted_title]
+
+        return TabularData(
+            header=header,
+            rows=get_rows(data=data)
         )
